@@ -1,0 +1,1071 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>出口多式联运申请单生成器</title>
+<!-- ===== 基础防护：禁用右键、F12、常用查看源码快捷键 ===== -->
+<script>
+(function () {
+  'use strict';
+
+  /* 1. 禁用右键菜单 */
+  document.addEventListener('contextmenu', function (e) {
+    e.preventDefault();
+    return false;
+  });
+
+  /* 2. 禁用常用快捷键 */
+  document.addEventListener('keydown', function (e) {
+    const k = e.key ? e.key.toUpperCase() : '';
+    // F12
+    if (k === 'F12') { e.preventDefault(); return false; }
+    // Ctrl+Shift+I / J / C（开发者工具、控制台、审查元素）
+    if (e.ctrlKey && e.shiftKey && (k === 'I' || k === 'J' || k === 'C')) {
+      e.preventDefault(); return false;
+    }
+    // Ctrl+U（查看源码）
+    if (e.ctrlKey && k === 'U') { e.preventDefault(); return false; }
+    // Ctrl+S（保存网页）
+    if (e.ctrlKey && k === 'S') { e.preventDefault(); return false; }
+    // Ctrl+Shift+K（Firefox 控制台）
+    if (e.ctrlKey && e.shiftKey && k === 'K') { e.preventDefault(); return false; }
+  }, true);
+
+  /* 3. 禁用拖拽保存图片/元素（可选） */
+  document.addEventListener('dragstart', function (e) {
+    e.preventDefault();
+  });
+
+  /* 4. 禁用文本选择（可注释掉，避免影响输入框） */
+  // document.addEventListener('selectstart', function (e) { e.preventDefault(); });
+
+  /* 5. 简易开发者工具检测（打开时清空页面提示） */
+  let devtoolsOpen = false;
+  const threshold = 160;
+  setInterval(function () {
+    const wDiff = window.outerWidth - window.innerWidth;
+    const hDiff = window.outerHeight - window.innerHeight;
+    if (wDiff > threshold || hDiff > threshold) {
+      if (!devtoolsOpen) {
+        devtoolsOpen = true;
+        document.body.innerHTML = '<div style="padding:60px;text-align:center;font-size:20px;color:#dc2626;">检测到开发者工具已打开，页面已停止服务。</div>';
+      }
+    } else {
+      devtoolsOpen = false;
+    }
+  }, 1000);
+
+  /* 6. 禁用 iframe 嵌套（防止被别人的页面套壳） */
+  if (window.top !== window.self) {
+    try { window.top.location = window.self.location; } catch (e) {}
+  }
+})();
+</script>
+<style>
+  :root{
+    --brand:#2563eb; --brand-dark:#1d4ed8; --bg:#f3f5f9; --card:#fff;
+    --line:#e2e8f0; --text:#1f2937; --muted:#64748b;
+    --auto-bg:#ecfdf5;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font-size:14px;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;}
+  header{background:linear-gradient(135deg,#1e3a8a,#2563eb);color:#fff;padding:18px 24px;box-shadow:0 2px 12px rgba(30,58,138,.25);display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;}
+  header h1{margin:0;font-size:18px;font-weight:600}
+  header .sub{font-size:12px;opacity:.8;margin-top:4px}
+  .wrap{max-width:1900px;margin:0 auto;padding:20px 24px 120px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px;margin-bottom:14px;box-shadow:0 1px 3px rgba(15,23,42,.04)}
+  .card h2{margin:0 0 12px;font-size:14px;font-weight:600;color:#334155;display:flex;align-items:center;gap:8px;justify-content:space-between}
+  .card h2 .left{display:flex;align-items:center;gap:8px}
+  .card h2 .left::before{content:"";width:3px;height:14px;background:var(--brand);border-radius:2px}
+
+  .drop{border:2px dashed #cbd5e1;border-radius:12px;padding:32px 20px;text-align:center;cursor:pointer;transition:.18s;background:#fafbfd;}
+  .drop:hover,.drop.over{border-color:var(--brand);background:#eff6ff}
+  .drop .ico{font-size:34px;line-height:1;margin-bottom:8px}
+  .drop .t1{font-size:15px;font-weight:600;color:#334155}
+  .drop .t2{font-size:12px;color:var(--muted);margin-top:6px}
+  .tip{margin-top:10px;font-size:12px;color:var(--muted);line-height:1.7}
+
+  .meta{display:flex;flex-wrap:wrap;gap:10px}
+  .meta .item{background:#f8fafc;border:1px solid var(--line);border-radius:8px;padding:8px 14px;font-size:12px;color:var(--muted);}
+  .meta .item b{display:block;color:#0f172a;font-size:14px;margin-top:3px;font-weight:600}
+  .meta .item.warn{background:#fff7ed;border-color:#fed7aa}
+  .meta .item.warn b{color:#c2410c}
+
+  .form-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px}
+  .fld label{display:block;font-size:12px;color:var(--muted);margin-bottom:4px}
+  .fld input{width:100%;padding:7px 9px;border:1px solid var(--line);border-radius:6px;font-size:13px;outline:none;transition:.15s;background:#fff;}
+  .fld input:focus{border-color:var(--brand);box-shadow:0 0 0 3px rgba(37,99,235,.12)}
+
+  .btn{border:none;border-radius:7px;padding:9px 18px;font-size:13px;font-weight:500;cursor:pointer;transition:.15s;font-family:inherit;white-space:nowrap;}
+  .btn-primary{background:var(--brand);color:#fff}
+  .btn-primary:hover{background:var(--brand-dark)}
+  .btn-ghost{background:#fff;color:#475569;border:1px solid var(--line)}
+  .btn-ghost:hover{background:#f1f5f9}
+  .btn-danger{background:#fff;color:#dc2626;border:1px solid #fecaca}
+  .btn-danger:hover{background:#fef2f2}
+  .btn-sm{padding:5px 10px;font-size:12px}
+
+  .tbl-scroll{overflow:auto;border:1px solid var(--line);border-radius:8px;max-height:340px;background:#fff}
+  table{border-collapse:separate;border-spacing:0;width:100%;font-size:13px}
+  thead th{position:sticky;top:0;z-index:3;background:#eef4ff;color:#1e3a8a;font-weight:600;font-size:12px;padding:8px 6px;text-align:center;border-bottom:1px solid #c7d7f5;border-right:1px solid #dbe6fb;white-space:nowrap;}
+  thead th:last-child{border-right:none}
+  tbody td{border-bottom:1px solid #eef2f7;border-right:1px solid #f1f5f9;padding:0;background:#fff}
+  tbody td:last-child{border-right:none}
+  tbody td input{width:100%;height:100%;border:none;outline:none;background:transparent;padding:7px 6px;font-size:12.5px;font-family:inherit;color:#0f172a;text-align:center;}
+  tbody td input:focus{background:#fff;box-shadow:inset 0 0 0 2px var(--brand);border-radius:3px}
+
+  tbody td select{
+    width:100%;height:100%;border:none;outline:none;background:transparent;
+    padding:7px 6px;font-size:12.5px;font-family:inherit;color:#0f172a;
+    text-align:center;cursor:pointer;
+    appearance:none;-webkit-appearance:none;-moz-appearance:none;
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path fill='%2394a3b8' d='M0 0l5 6 5-6z'/></svg>");
+    background-repeat:no-repeat;
+    background-position:right 6px center;
+    padding-right:20px;
+  }
+  tbody td select:focus{background-color:#fff;box-shadow:inset 0 0 0 2px var(--brand);border-radius:3px}
+
+  td.cell-auto{background:var(--auto-bg)}
+  td.cell-auto input{color:#047857;font-weight:600}
+  td.cell-auto select{color:#047857;font-weight:600}
+  td.cell-op{text-align:center;background:#fafbfc;padding:2px}
+  .btn-del{border:none;background:transparent;color:#cbd5e1;font-size:16px;line-height:1;cursor:pointer;padding:2px 8px;border-radius:5px}
+  .btn-del:hover{background:#fee2e2;color:#dc2626}
+
+  .bottom{position:fixed;left:0;right:0;bottom:0;background:rgba(255,255,255,.96);backdrop-filter:blur(8px);border-top:1px solid var(--line);padding:12px 24px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;z-index:20;box-shadow:0 -2px 12px rgba(15,23,42,.06);}
+  .bottom .left{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  .bottom .count{font-size:13px;color:var(--muted)}
+  .bottom .count b{color:var(--brand);font-size:15px}
+  .toast{position:fixed;top:20px;left:50%;transform:translateX(-50%) translateY(-20px);background:#0f172a;color:#fff;padding:10px 20px;border-radius:8px;font-size:13px;opacity:0;pointer-events:none;transition:.25s;z-index:99;box-shadow:0 6px 24px rgba(0,0,0,.2);}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+  .toast.err{background:#dc2626}
+  .toast.ok{background:#059669}
+  .toast.warn{background:#d97706}
+  .hidden{display:none!important}
+  .legend{display:flex;gap:16px;font-size:12px;color:var(--muted);margin-bottom:8px;flex-wrap:wrap}
+  .legend i{display:inline-block;width:12px;height:12px;border-radius:3px;vertical-align:-2px;margin-right:5px}
+  .tabs{display:flex;gap:4px;margin-bottom:12px;flex-wrap:wrap;border-bottom:1px solid var(--line);padding-bottom:0}
+  .tab{padding:8px 14px;font-size:13px;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;transition:.15s;user-select:none}
+  .tab:hover{color:var(--brand)}
+  .tab.active{color:var(--brand);font-weight:600;border-bottom-color:var(--brand)}
+  .pane{display:none}
+  .pane.active{display:block}
+  .src-tag{font-size:11px;padding:2px 8px;border-radius:10px;font-weight:500;margin-left:6px}
+  .src-tag.file{background:#dcfce7;color:#166534}
+  .src-tag.builtin{background:#fef3c7;color:#92400e}
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>出口多式联运申请单生成器</h1>
+    <div class="sub">上传预配舱单 → 自动解析成8个子表 → 编辑 → 导出 Excel</div>
+  </div>
+  <button class="btn btn-ghost" id="btnReset" style="display:none">重新上传</button>
+</header>
+
+<div class="wrap">
+
+  <div class="card" id="uploadCard">
+    <h2><span class="left">第一步：上传预配舱单</span></h2>
+    <div class="drop" id="dropZone">
+      <div class="ico">📄</div>
+      <div class="t1">点击选择文件，或把文件拖到这里</div>
+      <div class="t2">支持 .xls / .xlsx 格式，请确保文件里包含「参数」子表</div>
+      <input type="file" id="fileInput" accept=".xls,.xlsx" hidden />
+    </div>
+    <div class="tip">
+      · 解析后自动生成 <b>8 个子表</b>；<br />
+      · <b>「参数」子表会从上传文件中读取</b>，包装种类/集装箱尺寸/封志类型的下拉选项都来自该表；<br />
+      · 若上传文件未包含「参数」表，则回退到内置默认数据，并给出提示；<br />
+      · 文件全部在浏览器本地解析，不会上传服务器。
+    </div>
+  </div>
+
+  <div id="workspace" class="hidden">
+
+    <div class="card">
+      <h2><span class="left">解析结果</span></h2>
+      <div class="meta" id="metaBar"></div>
+    </div>
+
+    <div class="tabs" id="tabs"></div>
+
+    <div class="pane active" data-pane="basic">
+      <div class="card">
+        <h2><span class="left">基本信息</span></h2>
+        <div class="form-grid" id="basicForm"></div>
+      </div>
+    </div>
+
+    <div class="pane" data-pane="blInfo">
+      <div class="card">
+        <h2>
+          <span class="left">多式联运分单信息</span>
+          <button class="btn btn-ghost btn-sm" data-add="blInfo">+ 添加一行</button>
+        </h2>
+        <div class="legend">
+          <span><i style="background:#ecfdf5;border:1px solid #a7f3d0"></i>包装种类下拉选项来自上传文件的「参数」表</span>
+        </div>
+        <div class="tbl-scroll"><table data-table="blInfo"><thead></thead><tbody></tbody></table></div>
+      </div>
+    </div>
+
+    <div class="pane" data-pane="containerInfo">
+      <div class="card">
+        <h2><span class="left">集装箱信息</span><button class="btn btn-ghost btn-sm" data-add="containerInfo">+ 添加一行</button></h2>
+        <div class="tbl-scroll"><table data-table="containerInfo"><thead></thead><tbody></tbody></table></div>
+      </div>
+    </div>
+
+    <div class="pane" data-pane="sealInfo">
+      <div class="card">
+        <h2><span class="left">集装箱(器)封志信息</span><button class="btn btn-ghost btn-sm" data-add="sealInfo">+ 添加一行</button></h2>
+        <div class="tbl-scroll"><table data-table="sealInfo"><thead></thead><tbody></tbody></table></div>
+      </div>
+    </div>
+
+    <div class="pane" data-pane="exportBlInfo">
+      <div class="card">
+        <h2><span class="left">出境提运单信息</span><button class="btn btn-ghost btn-sm" data-add="exportBlInfo">+ 添加一行</button></h2>
+        <div class="tbl-scroll"><table data-table="exportBlInfo"><thead></thead><tbody></tbody></table></div>
+      </div>
+    </div>
+
+    <div class="pane" data-pane="exportBlMap">
+      <div class="card">
+        <h2><span class="left">出境提运单多式联运分单信息</span><button class="btn btn-ghost btn-sm" data-add="exportBlMap">+ 添加一行</button></h2>
+        <div class="tbl-scroll"><table data-table="exportBlMap"><thead></thead><tbody></tbody></table></div>
+      </div>
+    </div>
+
+    <div class="pane" data-pane="transportTrack">
+      <div class="card">
+        <h2><span class="left">境内运输轨迹信息</span><button class="btn btn-ghost btn-sm" data-add="transportTrack">+ 添加一行</button></h2>
+        <div class="tbl-scroll"><table data-table="transportTrack"><thead></thead><tbody></tbody></table></div>
+      </div>
+    </div>
+
+    <div class="pane" data-pane="params">
+      <div class="card">
+        <h2>
+          <span class="left">参数（只读）<span id="paramSource" class="src-tag"></span></span>
+        </h2>
+        <div class="tbl-scroll"><table data-table="params"><thead></thead><tbody></tbody></table></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="bottom hidden" id="bottomBar">
+  <div class="left">
+    <span class="count">共 <b id="rowCount">0</b> 行分单</span>
+  </div>
+  <div class="left">
+    <button class="btn btn-primary" id="btnExport">⬇ 导出 Excel（8 个工作表）</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
+
+<script>
+/* =========================================================
+ * 内置参数（兜底用，仅当上传文件里找不到「参数」表时才使用）
+ * =======================================================*/
+const BUILTIN_PARAMS_RAW = `AE  按扭式喷雾器瓶|20P5|20P5‑OS‑20‑806‑2.438mm(8fit)|E 电子封
+AM  未加保护玻璃瓶|22B0|22B0‑DC‑20‑806‑2.438mm(8fit)|M 机械封
+AP  加保护玻璃瓶|22G0|22G0‑DC‑20‑806‑2.438mm(8fit)|
+AT  喷雾器|22G1|22G1‑DC‑20‑806‑2.438mm(8fit)|
+BA  桶|22G2|22G2‑OS‑20‑806‑2.438mm(8fit)|
+BB  细绳|22P0|22P0‑FC‑20‑806‑2.438mm(8fit)|
+BC  带有瓶架的板条箱|22P1|22P1‑FX‑20‑806‑2.438mm(8fit)|
+BD  板|22P3|22P3‑FC‑20‑806‑2.438mm(8fit)|
+BE  捆扎|22P4|22P4‑FC‑20‑806‑2.438mm(8fit)|
+BF  未加保护球形瓶|22R1|22R1‑RF‑20‑806‑2.438mm(8fit)|
+BG  袋|22T5|22T5‑TK‑20‑806‑2.438mm(8fit)|
+BH  线束|22U1|22U1‑OT‑20‑806‑2.438mm(8fit)|
+BI  料箱|22V1|22V1‑VE‑20‑806‑2.438mm(8fit)|
+BJ  吊桶|22V7|22V7‑HG‑20‑806‑2.438mm(8fit)|
+BK  筐|25G1|25G1‑HQ‑20‑906‑2.438mm(8fit)|
+BL  已压缩包|25R1|25R1‑RH‑20‑906‑2.438mm(8fit)|
+BN  未压缩包|26G1|26G1‑HQ‑20‑906‑2.438mm(8fit)|
+BO  未加保护圆柱形瓶|26R1|26R1‑RH‑20‑906‑2.438mm(8fit)|
+BP  加保护球形瓶|28G2|28G2‑HH‑20‑403‑2.438mm(8fit)|
+BQ  加保护圆柱形瓶|28U1|28U1‑HH‑20‑403‑2.438mm(8fit)|
+CT  纸板箱|2LT5|2LT5‑TK‑20‑806‑>2.500mm|
+DR  金属桶|42G1|42G1‑DC‑40‑806‑2.438mm(8fit)|
+FR  框架|42U1|42U1‑OT‑40‑806‑2.438mm(8fit)|
+GI  (支)袈|45G1|45G1‑HQ‑40‑906‑2.438mm(8fit)|
+PE  托盘|4LG0|4LG0‑DC‑40‑806‑>2.500mm|
+PS  Pieces|4LR1|4LR1‑RF‑40‑806‑>2.500mm|
+BG  袋|||
+SA  袋|||`;
+
+function parseParamsRaw(raw){
+  return raw.split('\n')
+    .filter(line => line && !line.startsWith('#'))
+    .map(line => {
+      const p = line.split('|');
+      return {
+        packaging:     (p[0] || '').trim(),
+        ref:           (p[1] || '').trim(),
+        containerType: (p[2] || '').trim(),
+        sealType:      (p[3] || '').trim()
+      };
+    })
+    .filter(r => r.packaging);
+}
+
+const BUILTIN_PARAMS = parseParamsRaw(BUILTIN_PARAMS_RAW);
+
+/* 全局参数（会被上传文件的参数表覆盖） */
+let ACTIVE_PARAMS = BUILTIN_PARAMS.slice();
+let PACKAGE_TYPE_OPTIONS = ACTIVE_PARAMS.map(r => r.packaging).filter(Boolean);
+let PARAM_SOURCE = 'builtin';  // 'file' | 'builtin'
+
+/* =========================================================
+ * 子表定义
+ * =======================================================*/
+const SHEETS = {
+  basic: {
+    title: '基本信息', type: 'form',
+    fields: [
+      { key:'unifiedNo',     label:'统一编号' },
+      { key:'customsCode',   label:'*申报地海关代码', def:'3104' },
+      { key:'transportMode', label:'*出境运输方式',   def:'1' },
+      { key:'operator',      label:'多式联运经营人名称' },
+      { key:'remark',        label:'备注' }
+    ]
+  },
+  blInfo: {
+    title: '多式联运分单信息', type: 'table',
+    columns: [
+      { key:'blNo',        title:'*多式联运分单号',  auto:true },
+      { key:'grossWeight', title:'*货物总毛重',     auto:true },
+      { key:'packages',    title:'*货物总件数',     auto:true },
+      { key:'packageType', title:'*包装种类',       auto:true, dropdown:'packageType' }
+    ]
+  },
+  containerInfo: {
+    title: '集装箱信息', type: 'table',
+    columns: [
+      { key:'blNo',          title:'*多式联运分单号',        auto:true },
+      { key:'containerNo',   title:'*集装箱（器）编号',     auto:true },
+      { key:'containerType', title:'*集装箱（器）尺寸和类型', auto:true }
+    ]
+  },
+  sealInfo: {
+    title: '集装箱(器)封志信息', type: 'table',
+    columns: [
+      { key:'blNo',        title:'*多式联运分单号',    auto:true },
+      { key:'containerNo', title:'*集装箱（器）编号', auto:true },
+      { key:'sealType',    title:'*封志类型',         auto:true },
+      { key:'sealNo',      title:'*封志号码',         auto:true }
+    ]
+  },
+  exportBlInfo: {
+    title: '出境提运单信息', type: 'table',
+    columns: [
+      { key:'exportBlNo', title:'*出境提(运)单号',      auto:true },
+      { key:'voyage',     title:'出境航次/航班/车次号', auto:true },
+      { key:'vessel',     title:'出境运输工具信息',     auto:true }
+    ]
+  },
+  exportBlMap: {
+    title: '出境提运单多式联运分单信息', type: 'table',
+    columns: [
+      { key:'exportBlNo', title:'*出境提(运)单号', auto:true },
+      { key:'blNo',       title:'*多式联运分单号', auto:true }
+    ]
+  },
+  transportTrack: {
+    title: '境内运输轨迹信息', type: 'table',
+    columns: [
+      { key:'seq',           title:'*轨迹序号',            auto:false },
+      { key:'mode',          title:'到达该地点的运输方式', auto:false },
+      { key:'customs',       title:'*启运/途径/目的地海关', auto:false },
+      { key:'warehouseCode', title:'监管作业场所代码',     auto:false },
+      { key:'agentCode',     title:'代理企业代码',         auto:false }
+    ]
+  },
+  params: {
+    title: '参数', type: 'table',
+    columns: [
+      { key:'packaging',     title:'*包装种类',                auto:false, readonly:true },
+      { key:'ref',           title:'参照',                     auto:false, readonly:true },
+      { key:'containerType', title:'*集装箱（器）尺寸和类型',  auto:false, readonly:true },
+      { key:'sealType',      title:'*封志类型',                auto:false, readonly:true }
+    ]
+  }
+};
+
+const CONTAINER_TYPE_MAP = {
+  '20GP':'22G1','20G1':'22G1','40GP':'42G1','40G1':'42G1',
+  '40HQ':'45G1','40HC':'45G1','45HQ':'45G1','45HC':'45G1',
+  '20RF':'22R1','40RF':'42R1','40RH':'45R1','20OT':'22U1','40OT':'42U1',
+  '20FR':'22P1','40FR':'42P1','20TK':'22T5','40TK':'42T5'
+};
+
+function mapPackageType(unit){
+  const u = String(unit || '').toUpperCase();
+  const map = {
+    'CARTONS':'CT  纸板箱','CARTON':'CT  纸板箱','CTNS':'CT  纸板箱','CTN':'CT  纸板箱',
+    'PALLETS':'PE  托盘','PALLET':'PE  托盘','PLT':'PE  托盘',
+    'BAGS':'BG  袋','BAG':'BG  袋','SACKS':'SA  袋',
+    'PIECES':'PS  Pieces','PCS':'PS  Pieces','PIECE':'PS  Pieces',
+    'DRUMS':'DR  金属桶','DRUM':'DR  金属桶',
+    'BOXES':'BX  盒','BOX':'BX  盒',
+    'CASES':'CS  箱','CASE':'CS  箱',
+    'CRATES':'CR  板条箱','CRATE':'CR  板条箱',
+    'BALES':'BY  以堆/束/捆形式的板','BALE':'BY  以堆/束/捆形式的板',
+    'ROLLS':'RL  卷筒','ROLL':'RL  卷筒'
+  };
+  return map[u] || '';
+}
+
+/* =========================================================
+ * 状态
+ * =======================================================*/
+const state = {
+  meta: { vessel:'', voyage:'', destPort:'', blNo:'' },
+  sheets: {
+    basic: { unifiedNo:'', customsCode:'3104', transportMode:'1', operator:'', remark:'' },
+    blInfo: [], containerInfo: [], sealInfo: [],
+    exportBlInfo: [], exportBlMap: [], transportTrack: [],
+    params: BUILTIN_PARAMS
+  },
+  currentTab: 'basic'
+};
+
+const $  = (s) => document.querySelector(s);
+const $$ = (s) => Array.from(document.querySelectorAll(s));
+
+function toast(msg, type){
+  const el = $('#toast');
+  el.textContent = msg;
+  el.className = 'toast show ' + (type || '');
+  clearTimeout(el._t);
+  el._t = setTimeout(() => { el.className = 'toast ' + (type || ''); }, 3200);
+}
+
+function escapeAttr(s){
+  return String(s == null ? '' : s)
+    .replace(/&/g,'&amp;').replace(/"/g,'&quot;')
+    .replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function cellText(v){ return String(v == null ? '' : v).trim(); }
+
+function valueAfterLabel(row, label){
+  if (!row) return '';
+  const idx = row.findIndex(c => cellText(c) === label);
+  if (idx === -1) return '';
+  for (let i = idx + 1; i < row.length; i++){
+    const v = cellText(row[i]);
+    if (v) return v;
+  }
+  return '';
+}
+
+function colIndexLike(header, kw){
+  return header.findIndex(h => cellText(h).includes(kw));
+}
+
+/* =========================================================
+ * 从上传文件解析「参数」子表
+ * =======================================================*/
+function extractParamsFromWb(wb){
+  // 遍历所有工作表，找到名字或表头像「参数」的那个
+  for (const name of wb.SheetNames){
+    const ws = wb.Sheets[name];
+    if (!ws) continue;
+    const rows = XLSX.utils.sheet_to_json(ws, { header:1, defval:'', blankrows:true });
+    if (!rows.length) continue;
+
+    // 在开头 5 行内找表头
+    let headerIdx = -1;
+    for (let i = 0; i < Math.min(5, rows.length); i++){
+      const r = (rows[i] || []).map(c => cellText(c));
+      const hasPkg  = r.some(c => c.includes('包装种类'));
+      const hasSeal = r.some(c => c.includes('封志'));
+      if (hasPkg && hasSeal){ headerIdx = i; break; }
+      // 或者工作表名字叫“参数”，且本行有“包装种类”
+      if ((name.includes('参数') || name.toLowerCase().includes('param')) && hasPkg){
+        headerIdx = i; break;
+      }
+    }
+    if (headerIdx === -1) continue;
+
+    const header = (rows[headerIdx] || []).map(c => cellText(c));
+    const iPkg  = header.findIndex(h => h.includes('包装种类'));
+    const iRef  = header.findIndex(h => h === '参照' || h.includes('参照'));
+    const iCntr = header.findIndex(h => h.includes('尺寸和类型') || h.includes('集装箱'));
+    const iSeal = header.findIndex(h => h.includes('封志'));
+
+    if (iPkg === -1) continue;
+
+    const out = [];
+    for (let i = headerIdx + 1; i < rows.length; i++){
+      const r = rows[i];
+      if (!r || !r.some(c => cellText(c))) continue;
+      const pkg = cellText(r[iPkg]);
+      if (!pkg) continue;
+      out.push({
+        packaging:     pkg,
+        ref:           iRef  > -1 ? cellText(r[iRef])  : '',
+        containerType: iCntr > -1 ? cellText(r[iCntr]) : '',
+        sealType:      iSeal > -1 ? cellText(r[iSeal]) : ''
+      });
+    }
+    if (out.length) return out;
+  }
+  return null;
+}
+
+/* =========================================================
+ * 解析预配舱单
+ * =======================================================*/
+function readSheetRows(wb){
+  // 预配舱单数据默认在第一个工作表
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  if (!ws) throw new Error('未找到可用的工作表');
+  return XLSX.utils.sheet_to_json(ws, { header:1, defval:'', raw:true, blankrows:true });
+}
+
+function extractMeta(rows){
+  const meta = { vessel:'', voyage:'', destPort:'', blNo:'' };
+  for (const row of rows){
+    if (!meta.vessel)   meta.vessel   = valueAfterLabel(row, '船名');
+    if (!meta.voyage)   meta.voyage   = valueAfterLabel(row, '航次');
+    if (!meta.destPort) meta.destPort = valueAfterLabel(row, '目的港');
+    if (!meta.blNo)     meta.blNo     = valueAfterLabel(row, '总提单号');
+  }
+  return meta;
+}
+
+function extractDetails(rows){
+  const titleIdx = rows.findIndex(r => r && r.some(c => cellText(c).includes('明细品名及数据')));
+  if (titleIdx === -1) return [];
+
+  let headerIdx = -1;
+  for (let i = titleIdx; i < Math.min(titleIdx + 8, rows.length); i++){
+    const r = (rows[i] || []).map(c => cellText(c));
+    if (r.includes('提单号') && r.includes('箱号')) { headerIdx = i; break; }
+  }
+  if (headerIdx === -1) return [];
+
+  const header = (rows[headerIdx] || []).map(c => cellText(c));
+  const iBl   = colIndexLike(header, '提单号');
+  const iCntr = header.indexOf('箱号') > -1 ? header.indexOf('箱号') : colIndexLike(header, '箱号');
+  const iSeal = colIndexLike(header, '封号');
+  const iType = colIndexLike(header, '箱型');
+  const iPkg  = colIndexLike(header, '件数');
+  const iUnit = colIndexLike(header, '包装单位');
+  const iGW   = colIndexLike(header, '毛重');
+
+  const out = [];
+  for (let i = headerIdx + 1; i < rows.length; i++){
+    const r = rows[i];
+    if (!r || !r.some(c => cellText(c))) continue;
+    const first = cellText(r[0]);
+    if (first.includes('VGM')) break;
+    if (first.includes('分票统计') || first.includes('按箱统计') || first.includes('总票统计')) break;
+
+    const bl   = iBl   > -1 ? cellText(r[iBl])   : '';
+    const cntr = iCntr > -1 ? cellText(r[iCntr]) : '';
+    if (!bl && !cntr) continue;
+
+    out.push({
+      blNo: bl, containerNo: cntr,
+      sealNo: iSeal > -1 ? cellText(r[iSeal]) : '',
+      containerType: iType > -1 ? cellText(r[iType]) : '',
+      packages: iPkg > -1 ? cellText(r[iPkg]) : '',
+      packageUnit: iUnit > -1 ? cellText(r[iUnit]) : '',
+      grossWeight: iGW > -1 ? cellText(r[iGW]) : ''
+    });
+  }
+  return out;
+}
+
+/* =========================================================
+ * 生成子表数据
+ * =======================================================*/
+function buildSheets(details, meta, params){
+  const byBl = {};
+  details.forEach(d => {
+    if (!byBl[d.blNo]) byBl[d.blNo] = { grossWeight:0, packages:0, packageUnit:'', containerNo:'', containerType:'', sealNo:'' };
+    byBl[d.blNo].grossWeight += Number(d.grossWeight) || 0;
+    byBl[d.blNo].packages    += Number(d.packages)    || 0;
+    if (!byBl[d.blNo].packageUnit) byBl[d.blNo].packageUnit = d.packageUnit;
+    if (!byBl[d.blNo].containerNo)  byBl[d.blNo].containerNo  = d.containerNo;
+    if (!byBl[d.blNo].containerType) byBl[d.blNo].containerType = d.containerType;
+    if (!byBl[d.blNo].sealNo)       byBl[d.blNo].sealNo        = d.sealNo;
+  });
+
+  const blNos = Object.keys(byBl);
+
+  // 用「参数」表里的包装种类做匹配（不区分大小写，用 code 前缀匹配）
+  const pkgList = params.map(r => r.packaging).filter(Boolean);
+  function matchPkgType(unit){
+    const u = String(unit || '').toUpperCase();
+    // 先试内置英文 → 中文映射
+    const preset = mapPackageType(u);
+    if (preset){
+      // 若参数表中有相同项，用参数表里的
+      const hit = pkgList.find(p => p === preset || p.startsWith(preset.slice(0,2)));
+      if (hit) return hit;
+      return preset;
+    }
+    // 再用代码前缀匹配（如 CT、DR）
+    const hit = pkgList.find(p => p.toUpperCase().startsWith(u.slice(0,2)));
+    return hit || '';
+  }
+
+  const blInfo = blNos.map(bl => {
+    const info = byBl[bl];
+    return {
+      blNo: bl,
+      grossWeight: info.grossWeight || '',
+      packages: info.packages || '',
+      packageType: matchPkgType(info.packageUnit) || ''
+    };
+  });
+
+  const containerInfo = [];
+  blNos.forEach(bl => {
+    const info = byBl[bl];
+    if (!info.containerNo) return;
+    containerInfo.push({
+      blNo: bl, containerNo: info.containerNo,
+      containerType: CONTAINER_TYPE_MAP[info.containerType.toUpperCase()] || info.containerType
+    });
+  });
+
+  const sealInfo = [];
+  blNos.forEach(bl => {
+    const info = byBl[bl];
+    if (!info.containerNo) return;
+    sealInfo.push({ blNo: bl, containerNo: info.containerNo, sealType: 'M', sealNo: info.sealNo });
+  });
+
+  const exportBlInfo = blNos.map(bl => ({ exportBlNo: bl, voyage: meta.voyage, vessel: meta.vessel }));
+  const exportBlMap  = blNos.map(bl => ({ exportBlNo: bl, blNo: bl }));
+
+  const transportTrack = [
+    { seq:'1', mode:'', customs:'3104', warehouseCode:'CNNBO310196', agentCode:'91330200254097535F' },
+    { seq:'2', mode:'1', customs:'2942', warehouseCode:'2942758098400', agentCode:'' }
+  ];
+
+  const basic = { unifiedNo:'', customsCode:'3104', transportMode:'1', operator:'', remark:'' };
+
+  return { basic, blInfo, containerInfo, sealInfo, exportBlInfo, exportBlMap, transportTrack, params };
+}
+
+/* =========================================================
+ * 渲染
+ * =======================================================*/
+function renderMeta(){
+  const m = state.meta;
+  const paramWarn = PARAM_SOURCE === 'builtin';
+  const items = [
+    ['总提单号', m.blNo || '-'],
+    ['船名', m.vessel || '-'],
+    ['航次', m.voyage || '-'],
+    ['目的港', m.destPort || '-'],
+    ['分单数', state.sheets.blInfo.length]
+  ];
+  let html = items.map(([k,v]) => `<div class="item">${k}<b>${escapeAttr(v)}</b></div>`).join('');
+  if (paramWarn){
+    html += `<div class="item warn">参数来源<b>内置默认（上传文件未找到「参数」表）</b></div>`;
+  } else {
+    html += `<div class="item">参数来源<b>上传文件的「参数」表</b></div>`;
+  }
+  $('#metaBar').innerHTML = html;
+  $('#rowCount').textContent = state.sheets.blInfo.length;
+
+  // 参数子表来源标签
+  const tag = $('#paramSource');
+  if (tag){
+    if (PARAM_SOURCE === 'file'){
+      tag.textContent = '来自上传文件';
+      tag.className = 'src-tag file';
+    } else {
+      tag.textContent = '内置默认';
+      tag.className = 'src-tag builtin';
+    }
+  }
+}
+
+function renderTabs(){
+  const tabs = [
+    ['basic','基本信息'],
+    ['blInfo','多式联运分单信息'],
+    ['containerInfo','集装箱信息'],
+    ['sealInfo','封志信息'],
+    ['exportBlInfo','出境提运单信息'],
+    ['exportBlMap','提运单-分单映射'],
+    ['transportTrack','境内运输轨迹'],
+    ['params','参数']
+  ];
+  $('#tabs').innerHTML = tabs.map(([k, t]) =>
+    `<div class="tab ${k === state.currentTab ? 'active' : ''}" data-tab="${k}">${t}</div>`
+  ).join('');
+}
+
+function renderBasic(){
+  const data = state.sheets.basic;
+  $('#basicForm').innerHTML = SHEETS.basic.fields.map(f => {
+    const v = data[f.key] || f.def || '';
+    return `<div class="fld"><label>${f.label}</label><input type="text" data-basic="${f.key}" value="${escapeAttr(v)}" /></div>`;
+  }).join('');
+}
+
+function renderCellContent(tableKey, col, row, rowIdx){
+  const val = row[col.key] == null ? '' : row[col.key];
+
+  if (col.dropdown === 'packageType'){
+    const opts = PACKAGE_TYPE_OPTIONS.map(opt => {
+      const sel = opt === val ? ' selected' : '';
+      return `<option value="${escapeAttr(opt)}"${sel}>${escapeAttr(opt)}</option>`;
+    }).join('');
+    return `<select data-tkey="${tableKey}" data-tidx="${rowIdx}" data-col="${col.key}">
+      <option value="">-- 请选择 --</option>
+      ${opts}
+    </select>`;
+  }
+
+  const ro = col.readonly ? 'readonly' : '';
+  return `<input type="text" data-tkey="${tableKey}" data-tidx="${rowIdx}" data-col="${col.key}" value="${escapeAttr(val)}" ${ro} />`;
+}
+
+function renderTable(tableKey){
+  const sheet = SHEETS[tableKey];
+  const rows = state.sheets[tableKey] || [];
+  const tbl = document.querySelector(`[data-table="${tableKey}"]`);
+  if (!tbl) return;
+
+  const cols = sheet.columns;
+  tbl.querySelector('thead').innerHTML = `<tr>${
+    cols.map(c => `<th>${c.title}</th>`).join('')
+  }<th style="width:44px">操作</th></tr>`;
+
+  tbl.querySelector('tbody').innerHTML = rows.map((row, i) => {
+    const tds = cols.map(c => {
+      const cls = c.auto ? 'cell-auto' : '';
+      return `<td class="${cls}">${renderCellContent(tableKey, c, row, i)}</td>`;
+    }).join('');
+    return `<tr>${tds}<td class="cell-op"><button class="btn-del" data-del="${tableKey}" data-idx="${i}" title="删除该行">×</button></td></tr>`;
+  }).join('');
+}
+
+function renderAllTables(){
+  ['blInfo','containerInfo','sealInfo','exportBlInfo','exportBlMap','transportTrack','params'].forEach(renderTable);
+}
+
+/* =========================================================
+ * 事件
+ * =======================================================*/
+$('#tabs').addEventListener('click', e => {
+  const t = e.target.closest('.tab');
+  if (!t) return;
+  state.currentTab = t.dataset.tab;
+  $$('.tab').forEach(x => x.classList.toggle('active', x.dataset.tab === state.currentTab));
+  $$('.pane').forEach(p => p.classList.toggle('active', p.dataset.pane === state.currentTab));
+});
+
+$('#basicForm').addEventListener('input', e => {
+  const inp = e.target;
+  if (!inp.matches('input[data-basic]')) return;
+  state.sheets.basic[inp.dataset.basic] = inp.value;
+});
+
+function handleCellChange(e){
+  const t = e.target;
+  if (!t.matches('input[data-tkey], select[data-tkey]')) return;
+  const tkey = t.dataset.tkey;
+  const idx  = Number(t.dataset.tidx);
+  const col  = t.dataset.col;
+  if (!state.sheets[tkey] || !state.sheets[tkey][idx]) return;
+  state.sheets[tkey][idx][col] = t.value;
+}
+document.addEventListener('input', handleCellChange);
+document.addEventListener('change', handleCellChange);
+
+document.addEventListener('click', e => {
+  const btn = e.target.closest('.btn-del');
+  if (!btn) return;
+  const tkey = btn.dataset.del;
+  const idx  = Number(btn.dataset.idx);
+  if (!state.sheets[tkey]) return;
+  state.sheets[tkey].splice(idx, 1);
+  renderTable(tkey);
+  if (tkey === 'blInfo') renderMeta();
+});
+
+document.addEventListener('click', e => {
+  const btn = e.target.closest('[data-add]');
+  if (!btn) return;
+  const tkey = btn.dataset.add;
+  const sheet = SHEETS[tkey];
+  if (!sheet) return;
+  const row = {};
+  sheet.columns.forEach(c => { row[c.key] = ''; });
+  state.sheets[tkey].push(row);
+  renderTable(tkey);
+});
+
+/* 上传 */
+const dropZone = $('#dropZone');
+const fileInput = $('#fileInput');
+
+dropZone.addEventListener('click', () => fileInput.click());
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('over'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('over'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault(); dropZone.classList.remove('over');
+  const f = e.dataTransfer.files && e.dataTransfer.files[0];
+  if (f) handleFile(f);
+});
+fileInput.addEventListener('change', e => {
+  const f = e.target.files && e.target.files[0];
+  if (f) handleFile(f);
+  fileInput.value = '';
+});
+
+function handleFile(file){
+  if (!/\.(xls|xlsx)$/i.test(file.name || '')){ toast('请上传 .xls 或 .xlsx 文件','err'); return; }
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    try {
+      const wb = XLSX.read(new Uint8Array(ev.target.result), { type: 'array' });
+      parseAndShow(wb);
+    } catch (err){ console.error(err); toast('文件解析失败：' + err.message, 'err'); }
+  };
+  reader.onerror = () => toast('文件读取失败', 'err');
+  reader.readAsArrayBuffer(file);
+}
+
+function parseAndShow(wb){
+  const rows = readSheetRows(wb);
+  const meta = extractMeta(rows);
+  const details = extractDetails(rows);
+
+  if (!details.length){ toast('未能解析到「明细品名及数据」区块', 'err'); return; }
+
+  // ★ 从上传文件中读取「参数」子表
+  const paramsFromFile = extractParamsFromWb(wb);
+  let params;
+  if (paramsFromFile && paramsFromFile.length){
+    params = paramsFromFile;
+    PARAM_SOURCE = 'file';
+  } else {
+    params = BUILTIN_PARAMS.slice();
+    PARAM_SOURCE = 'builtin';
+  }
+
+  // 更新全局下拉选项
+  ACTIVE_PARAMS = params;
+  PACKAGE_TYPE_OPTIONS = params.map(r => r.packaging).filter(Boolean);
+
+  state.meta = meta;
+  state.sheets = buildSheets(details, meta, params);
+
+  renderMeta();
+  renderTabs();
+  renderBasic();
+  renderAllTables();
+
+  $('#uploadCard').classList.add('hidden');
+  $('#workspace').classList.remove('hidden');
+  $('#bottomBar').classList.remove('hidden');
+  $('#btnReset').style.display = 'inline-block';
+
+  if (PARAM_SOURCE === 'file'){
+    toast(`解析成功：${details.length} 行明细，${state.sheets.blInfo.length} 个分单；参数表来自上传文件（${params.length} 项）`, 'ok');
+  } else {
+    toast(`解析成功：${details.length} 行明细，${state.sheets.blInfo.length} 个分单；未找到「参数」表，使用内置默认参数`, 'warn');
+  }
+}
+
+$('#btnReset').addEventListener('click', () => {
+  if (state.sheets.blInfo.length && !confirm('重新上传将丢失当前已填写的内容，确定继续？')) return;
+  ACTIVE_PARAMS = BUILTIN_PARAMS.slice();
+  PACKAGE_TYPE_OPTIONS = ACTIVE_PARAMS.map(r => r.packaging).filter(Boolean);
+  PARAM_SOURCE = 'builtin';
+  state.sheets = {
+    basic:{ unifiedNo:'', customsCode:'3104', transportMode:'1', operator:'', remark:'' },
+    blInfo:[], containerInfo:[], sealInfo:[], exportBlInfo:[], exportBlMap:[], transportTrack:[],
+    params: BUILTIN_PARAMS
+  };
+  state.meta = { vessel:'', voyage:'', destPort:'', blNo:'' };
+  $('#uploadCard').classList.remove('hidden');
+  $('#workspace').classList.add('hidden');
+  $('#bottomBar').classList.add('hidden');
+  $('#btnReset').style.display = 'none';
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+});
+
+/* =========================================================
+ * 导出
+ * =======================================================*/
+function formatTimestamp(date){
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  const hh = String(date.getHours()).padStart(2, '0');
+  const mm = String(date.getMinutes()).padStart(2, '0');
+  return `${y}-${m}-${d}${hh}${mm}`;
+}
+
+const BORDER_THIN = {
+  top:    { style:'thin', color:{ argb:'FFB7C4D6' } },
+  bottom: { style:'thin', color:{ argb:'FFB7C4D6' } },
+  left:   { style:'thin', color:{ argb:'FFB7C4D6' } },
+  right:  { style:'thin', color:{ argb:'FFB7C4D6' } }
+};
+
+function applySheetStyle(ws){
+  ws.eachRow({ includeEmpty: true }, (row, rowNumber) => {
+    row.eachCell({ includeEmpty: true }, (cell) => {
+      cell.border = BORDER_THIN;
+      cell.alignment = { horizontal:'center', vertical:'center', wrapText:true };
+      if (rowNumber === 1){
+        cell.font = { name:'微软雅黑', size:10, bold:true, color:{ argb:'FF1F3864' } };
+        cell.fill = { type:'pattern', pattern:'solid', fgColor:{ argb:'FFDDEBF7' } };
+      } else {
+        cell.font = { name:'微软雅黑', size:10, color:{ argb:'FF1F2937' } };
+      }
+    });
+  });
+  if (ws.rowCount > 0) ws.getRow(1).height = 24;
+}
+
+function tableToAoa(tableKey){
+  const sheet = SHEETS[tableKey];
+  const data = state.sheets[tableKey] || [];
+  const header = sheet.columns.map(c => c.title);
+  const body = data.map(row => sheet.columns.map(c => row[c.key] ?? ''));
+  return [header, ...body];
+}
+
+async function exportWithExcelJS(){
+  const wb = new ExcelJS.Workbook();
+  wb.creator = 'Multi-Transport Generator';
+  wb.created = new Date();
+
+  /* 1. 基本信息 */
+  {
+    const ws = wb.addWorksheet('基本信息');
+    const fields = SHEETS.basic.fields;
+    ws.addRow(fields.map(f => f.label));
+    ws.addRow(fields.map(f => state.sheets.basic[f.key] || ''));
+    ws.columns = fields.map(f => ({ width: Math.max(12, Math.ceil(f.label.length * 2.2)) }));
+    applySheetStyle(ws);
+  }
+
+  /* 2. 多式联运分单信息（含包装种类下拉验证） */
+  {
+    const ws = wb.addWorksheet('多式联运分单信息');
+    ws.addRow(['*多式联运分单号', '*货物总毛重', '*货物总件数', '*包装种类']);
+    (state.sheets.blInfo || []).forEach(r => {
+      ws.addRow([r.blNo, r.grossWeight, r.packages, r.packageType]);
+    });
+    ws.columns = [{ width:20 }, { width:16 }, { width:14 }, { width:22 }];
+    applySheetStyle(ws);
+
+    const maxRow = Math.max(200, (state.sheets.blInfo?.length || 0) + 50);
+    const formula = `'参数'!$A$2:$A$${PACKAGE_TYPE_OPTIONS.length + 1}`;
+    for (let i = 2; i <= maxRow; i++){
+      ws.getCell(`D${i}`).dataValidation = {
+        type: 'list',
+        allowBlank: true,
+        formulae: [formula],
+        showErrorMessage: false,
+        showInputMessage: false
+      };
+    }
+  }
+
+  /* 3. 集装箱信息 */
+  {
+    const ws = wb.addWorksheet('集装箱信息');
+    tableToAoa('containerInfo').forEach(r => ws.addRow(r));
+    ws.columns = [{ width:18 }, { width:22 }, { width:24 }];
+    applySheetStyle(ws);
+  }
+
+  /* 4. 封志信息 */
+  {
+    const ws = wb.addWorksheet('集装箱(器)封志信息');
+    tableToAoa('sealInfo').forEach(r => ws.addRow(r));
+    ws.columns = [{ width:18 }, { width:22 }, { width:12 }, { width:16 }];
+    applySheetStyle(ws);
+  }
+
+  /* 5. 出境提运单信息 */
+  {
+    const ws = wb.addWorksheet('出境提运单信息');
+    tableToAoa('exportBlInfo').forEach(r => ws.addRow(r));
+    ws.columns = [{ width:18 }, { width:22 }, { width:22 }];
+    applySheetStyle(ws);
+  }
+
+  /* 6. 出境提运单多式联运分单信息 */
+  {
+    const ws = wb.addWorksheet('出境提运单多式联运分单信息');
+    tableToAoa('exportBlMap').forEach(r => ws.addRow(r));
+    ws.columns = [{ width:18 }, { width:18 }];
+    applySheetStyle(ws);
+  }
+
+  /* 7. 境内运输轨迹信息 */
+  {
+    const ws = wb.addWorksheet('境内运输轨迹信息');
+    tableToAoa('transportTrack').forEach(r => ws.addRow(r));
+    ws.columns = [{ width:10 }, { width:22 }, { width:22 }, { width:22 }, { width:26 }];
+    applySheetStyle(ws);
+  }
+
+  /* 8. 参数（最后添加，被前面的数据验证引用） */
+  {
+    const ws = wb.addWorksheet('参数');
+    ws.addRow(['*包装种类', '参照', '*集装箱（器）尺寸和类型', '*封志类型']);
+    ACTIVE_PARAMS.forEach(r => ws.addRow([r.packaging, r.ref, r.containerType, r.sealType]));
+    ws.columns = [{ width:28 }, { width:12 }, { width:42 }, { width:14 }];
+    applySheetStyle(ws);
+  }
+
+  const buffer = await wb.xlsx.writeBuffer();
+  const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  const bl = (state.meta.blNo || 'export').replace(/[\\/:*?"<>|]/g, '');
+  a.download = `出口多式联运申请单_${bl}_${formatTimestamp(new Date())}.xlsx`;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 500);
+}
+
+$('#btnExport').addEventListener('click', async () => {
+  try {
+    toast('正在生成 Excel …');
+    await exportWithExcelJS();
+    toast('导出成功，共 8 个工作表（含下拉验证）', 'ok');
+  } catch (err){
+    console.error(err);
+    toast('导出失败：' + err.message, 'err');
+  }
+});
+
+renderTabs();
+</script>
+</body>
+</html>
