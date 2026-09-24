@@ -1,0 +1,773 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>驳船无纸化清单生成器</title>
+<!-- ===== 基础防护：禁用右键、F12、常用查看源码快捷键 ===== -->
+<script>
+(function () {
+  'use strict';
+
+  /* 1. 禁用右键菜单 */
+  document.addEventListener('contextmenu', function (e) {
+    e.preventDefault();
+    return false;
+  });
+
+  /* 2. 禁用常用快捷键 */
+  document.addEventListener('keydown', function (e) {
+    const k = e.key ? e.key.toUpperCase() : '';
+    // F12
+    if (k === 'F12') { e.preventDefault(); return false; }
+    // Ctrl+Shift+I / J / C（开发者工具、控制台、审查元素）
+    if (e.ctrlKey && e.shiftKey && (k === 'I' || k === 'J' || k === 'C')) {
+      e.preventDefault(); return false;
+    }
+    // Ctrl+U（查看源码）
+    if (e.ctrlKey && k === 'U') { e.preventDefault(); return false; }
+    // Ctrl+S（保存网页）
+    if (e.ctrlKey && k === 'S') { e.preventDefault(); return false; }
+    // Ctrl+Shift+K（Firefox 控制台）
+    if (e.ctrlKey && e.shiftKey && k === 'K') { e.preventDefault(); return false; }
+  }, true);
+
+  /* 3. 禁用拖拽保存图片/元素（可选） */
+  document.addEventListener('dragstart', function (e) {
+    e.preventDefault();
+  });
+
+  /* 4. 禁用文本选择（可注释掉，避免影响输入框） */
+  // document.addEventListener('selectstart', function (e) { e.preventDefault(); });
+
+  /* 5. 简易开发者工具检测（打开时清空页面提示） */
+  let devtoolsOpen = false;
+  const threshold = 160;
+  setInterval(function () {
+    const wDiff = window.outerWidth - window.innerWidth;
+    const hDiff = window.outerHeight - window.innerHeight;
+    if (wDiff > threshold || hDiff > threshold) {
+      if (!devtoolsOpen) {
+        devtoolsOpen = true;
+        document.body.innerHTML = '<div style="padding:60px;text-align:center;font-size:20px;color:#dc2626;">检测到开发者工具已打开，页面已停止服务。</div>';
+      }
+    } else {
+      devtoolsOpen = false;
+    }
+  }, 1000);
+
+  /* 6. 禁用 iframe 嵌套（防止被别人的页面套壳） */
+  if (window.top !== window.self) {
+    try { window.top.location = window.self.location; } catch (e) {}
+  }
+})();
+</script>
+<style>
+  :root{
+    --brand:#2563eb; --brand-dark:#1d4ed8; --bg:#f3f5f9; --card:#fff;
+    --line:#e2e8f0; --text:#1f2937; --muted:#64748b;
+    --auto-bg:#ecfdf5; --auto-line:#a7f3d0;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0;background:var(--bg);color:var(--text);font-size:14px;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+  }
+  header{
+    background:linear-gradient(135deg,#1e3a8a,#2563eb);
+    color:#fff;padding:18px 24px;box-shadow:0 2px 12px rgba(30,58,138,.25);
+    display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;
+  }
+  header h1{margin:0;font-size:18px;font-weight:600;letter-spacing:.5px}
+  header .sub{font-size:12px;opacity:.8;margin-top:4px}
+  .wrap{max-width:1800px;margin:0 auto;padding:20px 24px 120px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:18px;margin-bottom:16px;box-shadow:0 1px 3px rgba(15,23,42,.04)}
+  .card h2{margin:0 0 14px;font-size:14px;font-weight:600;color:#334155;display:flex;align-items:center;gap:8px}
+  .card h2::before{content:"";width:3px;height:14px;background:var(--brand);border-radius:2px}
+
+  .drop{
+    border:2px dashed #cbd5e1;border-radius:12px;padding:36px 20px;text-align:center;
+    cursor:pointer;transition:.18s;background:#fafbfd;
+  }
+  .drop:hover,.drop.over{border-color:var(--brand);background:#eff6ff}
+  .drop .ico{font-size:36px;line-height:1;margin-bottom:10px}
+  .drop .t1{font-size:15px;font-weight:600;color:#334155}
+  .drop .t2{font-size:12px;color:var(--muted);margin-top:6px}
+  .tip{margin-top:12px;font-size:12px;color:var(--muted);line-height:1.7}
+
+  .meta{display:flex;flex-wrap:wrap;gap:10px}
+  .meta .item{
+    background:#f8fafc;border:1px solid var(--line);border-radius:8px;
+    padding:8px 14px;font-size:12px;color:var(--muted);
+  }
+  .meta .item b{display:block;color:#0f172a;font-size:14px;margin-top:3px;font-weight:600}
+
+  .bulk-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:10px}
+  .fld label{display:block;font-size:12px;color:var(--muted);margin-bottom:4px}
+  .fld input{
+    width:100%;padding:7px 9px;border:1px solid var(--line);border-radius:6px;
+    font-size:13px;outline:none;transition:.15s;background:#fff;
+  }
+  .fld input:focus{border-color:var(--brand);box-shadow:0 0 0 3px rgba(37,99,235,.12)}
+  .bulk-actions{display:flex;align-items:center;gap:14px;margin-top:14px;flex-wrap:wrap}
+  .chk{display:flex;align-items:center;gap:6px;font-size:13px;color:#475569;cursor:pointer;user-select:none}
+  .chk input{width:15px;height:15px;accent-color:var(--brand);cursor:pointer}
+
+  .btn{
+    border:none;border-radius:7px;padding:9px 18px;font-size:13px;font-weight:500;
+    cursor:pointer;transition:.15s;font-family:inherit;white-space:nowrap;
+  }
+  .btn-primary{background:var(--brand);color:#fff}
+  .btn-primary:hover{background:var(--brand-dark)}
+  .btn-ghost{background:#fff;color:#475569;border:1px solid var(--line)}
+  .btn-ghost:hover{background:#f1f5f9;border-color:#cbd5e1}
+  .btn-danger{background:#fff;color:#dc2626;border:1px solid #fecaca}
+  .btn-danger:hover{background:#fef2f2}
+  .btn:disabled{opacity:.5;cursor:not-allowed}
+
+  .tbl-scroll{overflow:auto;border:1px solid var(--line);border-radius:8px;max-height:62vh;background:#fff}
+  table{border-collapse:separate;border-spacing:0;width:100%;font-size:13px}
+  thead th{
+    position:sticky;top:0;z-index:3;background:#eef4ff;color:#1e3a8a;font-weight:600;
+    font-size:12px;padding:9px 6px;text-align:center;border-bottom:1px solid #c7d7f5;
+    border-right:1px solid #dbe6fb;white-space:nowrap;
+  }
+  thead th:last-child{border-right:none}
+  tbody td{border-bottom:1px solid #eef2f7;border-right:1px solid #f1f5f9;padding:0;background:#fff}
+  tbody td:last-child{border-right:none}
+  tbody tr:hover td{background:#f8fbff}
+  tbody td input{
+    width:100%;height:100%;border:none;outline:none;background:transparent;
+    padding:8px 7px;font-size:13px;font-family:inherit;color:#0f172a;text-align:center;
+  }
+  tbody td input:focus{background:#fff;box-shadow:inset 0 0 0 2px var(--brand);border-radius:3px}
+  td.cell-auto{background:var(--auto-bg)}
+  td.cell-auto input{color:#047857;font-weight:600}
+  tbody tr:hover td.cell-auto{background:#dcfce7}
+  td.cell-seq{text-align:center;color:var(--muted);font-size:12px;background:#f8fafc;padding:8px 4px;font-weight:600}
+  td.cell-op{text-align:center;background:#fafbfc;padding:4px}
+  .btn-del{
+    border:none;background:transparent;color:#cbd5e1;font-size:18px;line-height:1;
+    cursor:pointer;padding:2px 8px;border-radius:5px;transition:.15s;
+  }
+  .btn-del:hover{background:#fee2e2;color:#dc2626}
+
+  .bottom{
+    position:fixed;left:0;right:0;bottom:0;background:rgba(255,255,255,.96);
+    backdrop-filter:blur(8px);border-top:1px solid var(--line);
+    padding:12px 24px;display:flex;justify-content:space-between;align-items:center;
+    gap:12px;flex-wrap:wrap;z-index:20;box-shadow:0 -2px 12px rgba(15,23,42,.06);
+  }
+  .bottom .left{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  .bottom .count{font-size:13px;color:var(--muted)}
+  .bottom .count b{color:var(--brand);font-size:15px}
+  .toast{
+    position:fixed;top:20px;left:50%;transform:translateX(-50%) translateY(-20px);
+    background:#0f172a;color:#fff;padding:10px 20px;border-radius:8px;font-size:13px;
+    opacity:0;pointer-events:none;transition:.25s;z-index:99;box-shadow:0 6px 24px rgba(0,0,0,.2);
+  }
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+  .toast.err{background:#dc2626}
+  .toast.ok{background:#059669}
+  .hidden{display:none!important}
+  .legend{display:flex;gap:16px;font-size:12px;color:var(--muted);margin-bottom:10px;flex-wrap:wrap}
+  .legend i{display:inline-block;width:12px;height:12px;border-radius:3px;vertical-align:-2px;margin-right:5px}
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>驳船无纸化清单生成器</h1>
+    <div class="sub">上传预配舱单 → 自动解析 → 补录空字段 → 导出 Excel</div>
+  </div>
+  <button class="btn btn-ghost" id="btnReset" style="display:none">重新上传</button>
+</header>
+
+<div class="wrap">
+
+  <div class="card" id="uploadCard">
+    <h2>第一步：上传预配舱单</h2>
+    <div class="drop" id="dropZone">
+      <div class="ico">📄</div>
+      <div class="t1">点击选择文件，或把文件拖到这里</div>
+      <div class="t2">支持 .xls / .xlsx 格式</div>
+      <input type="file" id="fileInput" accept=".xls,.xlsx" hidden />
+    </div>
+    <div class="tip">
+      · 上传后会自动读取「明细品名及数据」「VGM数据」「船名 / 航次 / 目的港 / 总提单号」区块；<br />
+      · 自动填充：<b>箱号、提单、卸货港代码、VGM重量、件数、箱型</b>；<br />
+      · 仅「一程英文船名、一程UN代码、二程英文船名、二程船名代码、进出口标记」自动预填默认值，其余字段留空由你每次手动填写；<br />
+      · 文件不会被上传到任何服务器，全部在浏览器本地解析。
+    </div>
+  </div>
+
+  <div id="workspace" class="hidden">
+
+    <div class="card">
+      <h2>解析结果</h2>
+      <div class="meta" id="metaBar"></div>
+    </div>
+
+    <div class="card">
+      <h2>批量填充（仅5个字段预填默认值，可修改后应用到所有行）</h2>
+      <div class="bulk-grid" id="bulkGrid"></div>
+      <div class="bulk-actions">
+        <button class="btn btn-primary" id="btnApplyBulk">应用到所有行</button>
+        <button class="btn btn-ghost" id="btnClearBulk">清空填写</button>
+        <label class="chk"><input type="checkbox" id="chkOnlyEmpty" checked /> 仅填充当前为空的单元格</label>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>清单明细（可直接编辑）</h2>
+      <div class="legend">
+        <span><i style="background:#ecfdf5;border:1px solid #a7f3d0"></i>绿色底 = 系统自动填充</span>
+        <span><i style="background:#fff;border:1px solid #e2e8f0"></i>白色底 = 需手动补录</span>
+      </div>
+      <div class="tbl-scroll">
+        <table id="dataTable">
+          <thead><tr id="theadRow"></tr></thead>
+          <tbody id="tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="bottom hidden" id="bottomBar">
+  <div class="left">
+    <button class="btn btn-ghost" id="btnAddRow">+ 添加一行</button>
+    <button class="btn btn-danger" id="btnClearAll">清空所有行</button>
+    <span class="count">共 <b id="rowCount">0</b> 行</span>
+  </div>
+  <div class="left">
+    <button class="btn btn-primary" id="btnExport">⬇ 导出 Excel</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
+<script>
+  if (typeof XLSX === 'undefined') {
+    document.write('<script src="https://unpkg.com/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"><\/script>');
+  }
+</script>
+
+<script>
+/* =========================================================
+ * 1. 列定义
+ * =======================================================*/
+const COLUMNS = [
+  { key:'seq',           title:'序号',        w:56,  auto:true,  type:'int'  },
+  { key:'polPort',       title:'一程码头',    w:100, auto:false, type:'text' },
+  { key:'vessel1',       title:'一程英文船名',w:150, auto:false, type:'text' },
+  { key:'vessel1Code',   title:'一程UN代码',  w:120, auto:false, type:'text' },
+  { key:'voyage1',       title:'一程航次',    w:100, auto:false, type:'text' },
+  { key:'polPort2',      title:'二程码头',    w:100, auto:false, type:'text' },
+  { key:'vessel2',       title:'二程英文船名',w:150, auto:false, type:'text' },
+  { key:'vessel2Code',   title:'二程船名代码',w:120, auto:false, type:'text' },
+  { key:'voyage2',       title:'二程航次',    w:100, auto:false, type:'text' },
+  { key:'ieFlag',        title:'进出口标记',  w:90,  auto:false, type:'text' },
+  { key:'agentCode',     title:'船代代码',    w:100, auto:false, type:'text' },
+  { key:'mblNo',         title:'多联单号',    w:160, auto:false, type:'text' },
+  { key:'containerNo',   title:'箱号',        w:130, auto:true,  type:'text' },
+  { key:'blNo',          title:'提单',        w:130, auto:true,  type:'text' },
+  { key:'destCode',      title:'卸货港代码',  w:100, auto:true,  type:'text' },
+  { key:'transitDest',   title:'中转目的地',  w:110, auto:false, type:'text' },
+  { key:'vgmWeight',     title:'VGM重量',     w:100, auto:true,  type:'num'  },
+  { key:'originPort',    title:'启运港',      w:110, auto:false, type:'text' },
+  { key:'packages',      title:'件数',        w:80,  auto:true,  type:'num'  },
+  { key:'containerType', title:'箱型',        w:80,  auto:true,  type:'text' },
+  { key:'operator',      title:'操作人',      w:90,  auto:false, type:'text' },
+  { key:'operatorPhone', title:'操作人电话',  w:130, auto:false, type:'text' },
+];
+
+/* 批量填充面板字段 */
+const BULK_FIELDS = [
+  'polPort','vessel1','vessel1Code','voyage1',
+  'polPort2','vessel2','vessel2Code','voyage2',
+  'ieFlag','agentCode','mblNo','transitDest',
+  'originPort','operator','operatorPhone'
+];
+
+/* ★ 只保留这 5 个字段的默认值，其余字段自动留空 */
+const DEFAULT_BULK_VALUES = {
+  vessel1:     'YONGZHOU',
+  vessel1Code: 'FC0006713',
+  vessel2:     'YONGZHOU',
+  vessel2Code: 'FC0006713',
+  ieFlag:      'E'
+};
+
+/* 箱型映射 */
+const CONTAINER_TYPE_MAP = {
+  '20GP':'22G1','40GP':'42G1','40HQ':'45G1','45HQ':'45G1',
+  '40HC':'45G1','20RF':'22R1','40RF':'42R1','40RH':'45R1',
+  '20OT':'22U1','40OT':'42U1','20FR':'22P1','40FR':'42P1'
+};
+
+/* 卸货港 → UN/LOCODE */
+const PORT_CODE_MAP = {
+  'AQABA':'JOAQJ','JEBEL ALI':'AEJEA','SHANGHAI':'CNSHA','NINGBO':'CNNGB',
+  'BUSAN':'KRPUS','SINGAPORE':'SGSIN','PORT KLANG':'MYPKG','JAKARTA':'IDJKT',
+  'HO CHI MINH':'VNSGN','HAIPHONG':'VNHPH','BANGKOK':'THBKK','MANILA':'PHMNL',
+  'DUBAI':'AEJEA','DAMMAM':'SADMM','RIYADH':'SARUH','KUWAIT':'KWKWI',
+  'UMM QASR':'IQUQR','BASRA':'IQBSR','BAGHDAD':'IQBGW','ALEXANDRIA':'EGALY',
+  'MOMBASA':'KEMBA','DURBAN':'ZADUR','LAGOS':'NGLOS','TEMA':'GHTEM'
+};
+
+const state = {
+  meta: { vessel:'', voyage:'', destPort:'', blNo:'' },
+  rows: [],
+  fileName: ''
+};
+
+const $  = (s) => document.querySelector(s);
+const $$ = (s) => Array.from(document.querySelectorAll(s));
+
+function toast(msg, type){
+  const el = $('#toast');
+  el.textContent = msg;
+  el.className = 'toast show ' + (type || '');
+  clearTimeout(el._t);
+  el._t = setTimeout(() => { el.className = 'toast ' + (type || ''); }, 2600);
+}
+
+function escapeAttr(s){
+  return String(s == null ? '' : s)
+    .replace(/&/g,'&amp;').replace(/"/g,'&quot;')
+    .replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function cellText(v){
+  return String(v == null ? '' : v).trim();
+}
+
+function valueAfterLabel(row, label){
+  if (!row) return '';
+  const idx = row.findIndex(c => cellText(c) === label);
+  if (idx === -1) return '';
+  for (let i = idx + 1; i < row.length; i++){
+    const v = cellText(row[i]);
+    if (v) return v;
+  }
+  return '';
+}
+
+function colIndexLike(header, kw){
+  return header.findIndex(h => cellText(h).includes(kw));
+}
+
+/* 解析 */
+function readSheetRows(wb){
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  if (!ws) throw new Error('未找到可用的工作表');
+  return XLSX.utils.sheet_to_json(ws, {
+    header: 1, defval: '', raw: true, blankrows: true
+  });
+}
+
+function extractMeta(rows){
+  const meta = { vessel:'', voyage:'', destPort:'', blNo:'' };
+  for (const row of rows){
+    if (!meta.vessel)   meta.vessel   = valueAfterLabel(row, '船名');
+    if (!meta.voyage)   meta.voyage   = valueAfterLabel(row, '航次');
+    if (!meta.destPort) meta.destPort = valueAfterLabel(row, '目的港');
+    if (!meta.blNo)     meta.blNo     = valueAfterLabel(row, '总提单号');
+  }
+  return meta;
+}
+
+function extractDetails(rows){
+  const titleIdx = rows.findIndex(r =>
+    r && r.some(c => cellText(c).includes('明细品名及数据'))
+  );
+  if (titleIdx === -1) return [];
+
+  let headerIdx = -1;
+  for (let i = titleIdx; i < Math.min(titleIdx + 8, rows.length); i++){
+    const r = (rows[i] || []).map(c => cellText(c));
+    if (r.includes('提单号') && r.includes('箱号')) { headerIdx = i; break; }
+  }
+  if (headerIdx === -1) return [];
+
+  const header = (rows[headerIdx] || []).map(c => cellText(c));
+  const iBl   = colIndexLike(header, '提单号');
+  const iCntr = header.indexOf('箱号') > -1 ? header.indexOf('箱号') : colIndexLike(header, '箱号');
+  const iSeal = colIndexLike(header, '封号');
+  const iType = colIndexLike(header, '箱型');
+  const iName = colIndexLike(header, '英文品名');
+  const iHs   = colIndexLike(header, 'HScode');
+  const iPkg  = colIndexLike(header, '件数');
+  const iUnit = colIndexLike(header, '包装单位');
+  const iGW   = colIndexLike(header, '毛重');
+  const iVol  = colIndexLike(header, '体积');
+  const iMark = colIndexLike(header, '唛头');
+  const iUn   = colIndexLike(header, 'UN Code');
+  const iCls  = colIndexLike(header, '类别');
+
+  const out = [];
+  for (let i = headerIdx + 1; i < rows.length; i++){
+    const r = rows[i];
+    if (!r || !r.some(c => cellText(c))) continue;
+
+    const first = cellText(r[0]);
+    if (first.includes('VGM')) break;
+    if (first.includes('分票统计') || first.includes('按箱统计') || first.includes('总票统计')) break;
+
+    const bl   = iBl   > -1 ? cellText(r[iBl])   : '';
+    const cntr = iCntr > -1 ? cellText(r[iCntr]) : '';
+    if (!bl && !cntr) continue;
+
+    out.push({
+      blNo:          bl,
+      containerNo:   cntr,
+      sealNo:        iSeal > -1 ? cellText(r[iSeal]) : '',
+      containerType: iType > -1 ? cellText(r[iType]) : '',
+      nameEN:        iName > -1 ? cellText(r[iName]) : '',
+      hsCode:        iHs   > -1 ? cellText(r[iHs])   : '',
+      packages:      iPkg  > -1 ? cellText(r[iPkg])  : '',
+      packageUnit:   iUnit > -1 ? cellText(r[iUnit]) : '',
+      grossWeight:   iGW   > -1 ? cellText(r[iGW])   : '',
+      volume:        iVol  > -1 ? cellText(r[iVol])  : '',
+      mark:          iMark > -1 ? cellText(r[iMark]) : '',
+      unCode:        iUn   > -1 ? cellText(r[iUn])   : '',
+      hazardClass:   iCls  > -1 ? cellText(r[iCls])  : ''
+    });
+  }
+  return out;
+}
+
+function extractVgm(rows){
+  const map = {};
+  const titleIdx = rows.findIndex(r =>
+    r && r.some(c => cellText(c).includes('VGM数据'))
+  );
+  if (titleIdx === -1) return map;
+
+  let headerIdx = -1;
+  for (let i = titleIdx; i < Math.min(titleIdx + 6, rows.length); i++){
+    const r = (rows[i] || []).map(c => cellText(c));
+    if (r.includes('箱号') && r.some(c => c.includes('VGM重量'))) { headerIdx = i; break; }
+  }
+  if (headerIdx === -1) return map;
+
+  const header = (rows[headerIdx] || []).map(c => cellText(c));
+  const iCntr = header.indexOf('箱号');
+  const iVgm  = header.findIndex(h => h.includes('VGM重量'));
+  if (iCntr === -1 || iVgm === -1) return map;
+
+  for (let i = headerIdx + 1; i < rows.length; i++){
+    const r = rows[i];
+    if (!r || !r.some(c => cellText(c))) continue;
+    const cntr = cellText(r[iCntr]);
+    if (!cntr) continue;
+    if (cntr.includes('发货人') || cntr.includes('收货人')) break;
+    map[cntr] = cellText(r[iVgm]);
+  }
+  return map;
+}
+
+function buildRows(details, vgmMap, meta){
+  const destCode = PORT_CODE_MAP[meta.destPort.toUpperCase()] || '';
+
+  return details.map((d) => {
+    const row = {};
+    COLUMNS.forEach(c => { row[c.key] = ''; });
+
+    row.containerNo   = d.containerNo;
+    row.blNo          = d.blNo;
+    row.destCode      = destCode;
+    row.packages      = d.packages;
+    row.containerType = CONTAINER_TYPE_MAP[d.containerType.toUpperCase()] || d.containerType;
+    row.vgmWeight     = vgmMap[d.containerNo] || '';
+    return row;
+  });
+}
+
+/* 渲染 */
+function renderMeta(){
+  const m = state.meta;
+  const cntrs = new Set(state.rows.map(r => r.containerNo).filter(Boolean));
+  const totalPkg = state.rows.reduce((s, r) => s + (Number(r.packages) || 0), 0);
+
+  const items = [
+    ['总提单号', m.blNo || '-'],
+    ['船名', m.vessel || '-'],
+    ['航次', m.voyage || '-'],
+    ['目的港', m.destPort || '-'],
+    ['箱数', cntrs.size],
+    ['分票行数', state.rows.length],
+    ['总件数', totalPkg],
+  ];
+  $('#metaBar').innerHTML = items.map(([k, v]) =>
+    `<div class="item">${k}<b>${escapeAttr(v)}</b></div>`
+  ).join('');
+}
+
+function renderBulkGrid(){
+  $('#bulkGrid').innerHTML = BULK_FIELDS.map(key => {
+    const col = COLUMNS.find(c => c.key === key);
+    const defaultValue = DEFAULT_BULK_VALUES[key] || '';
+    return `<div class="fld">
+      <label>${col.title}</label>
+      <input type="text" data-bulk="${key}" value="${escapeAttr(defaultValue)}" placeholder="填写后点右侧按钮" />
+    </div>`;
+  }).join('');
+}
+
+function renderTable(){
+  $('#theadRow').innerHTML =
+    COLUMNS.map(c => `<th style="width:${c.w}px;min-width:${c.w}px">${c.title}</th>`).join('') +
+    `<th style="width:52px;min-width:52px">操作</th>`;
+
+  const html = state.rows.map((row, i) => {
+    const tds = COLUMNS.map(c => {
+      if (c.key === 'seq'){
+        return `<td class="cell-seq">${i + 1}</td>`;
+      }
+      const val = row[c.key] == null ? '' : row[c.key];
+      const cls = c.auto ? 'cell-auto' : '';
+      return `<td class="${cls}"><input type="text" data-key="${c.key}" value="${escapeAttr(val)}" /></td>`;
+    }).join('');
+    return `<tr data-index="${i}">${tds}<td class="cell-op"><button class="btn-del" title="删除该行">×</button></td></tr>`;
+  }).join('');
+
+  $('#tbody').innerHTML = html;
+  $('#rowCount').textContent = state.rows.length;
+}
+
+/* 事件 */
+const dropZone = $('#dropZone');
+const fileInput = $('#fileInput');
+
+dropZone.addEventListener('click', () => fileInput.click());
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('over'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('over'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropZone.classList.remove('over');
+  const f = e.dataTransfer.files && e.dataTransfer.files[0];
+  if (f) handleFile(f);
+});
+fileInput.addEventListener('change', e => {
+  const f = e.target.files && e.target.files[0];
+  if (f) handleFile(f);
+  fileInput.value = '';
+});
+
+function handleFile(file){
+  const name = file.name || '';
+  if (!/\.(xls|xlsx)$/i.test(name)){
+    toast('请上传 .xls 或 .xlsx 文件', 'err');
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    try {
+      const wb = XLSX.read(new Uint8Array(ev.target.result), { type: 'array' });
+      parseAndShow(wb, name);
+    } catch (err){
+      console.error(err);
+      toast('文件解析失败：' + err.message, 'err');
+    }
+  };
+  reader.onerror = () => toast('文件读取失败', 'err');
+  reader.readAsArrayBuffer(file);
+}
+
+function parseAndShow(wb, fileName){
+  const rows = readSheetRows(wb);
+  const meta = extractMeta(rows);
+  const details = extractDetails(rows);
+  const vgmMap = extractVgm(rows);
+
+  if (!details.length){
+    toast('未能解析到「明细品名及数据」区块，请确认文件格式', 'err');
+    return;
+  }
+
+  state.meta = meta;
+  state.fileName = fileName;
+  state.rows = buildRows(details, vgmMap, meta);
+
+  // 仅应用5个字段的默认值，其余字段保持为空
+  state.rows.forEach(row => {
+    Object.keys(DEFAULT_BULK_VALUES).forEach(k => {
+      if (!row[k]) row[k] = DEFAULT_BULK_VALUES[k];
+    });
+  });
+
+  renderMeta();
+  renderBulkGrid();
+  renderTable();
+
+  $('#uploadCard').classList.add('hidden');
+  $('#workspace').classList.remove('hidden');
+  $('#bottomBar').classList.remove('hidden');
+  $('#btnReset').style.display = 'inline-block';
+
+  toast(`解析成功：${state.rows.length} 行，仅5个字段自动填入`, 'ok');
+}
+
+$('#tbody').addEventListener('input', e => {
+  const inp = e.target;
+  if (!inp.matches('input[data-key]')) return;
+  const tr = inp.closest('tr');
+  const idx = Number(tr.dataset.index);
+  if (!state.rows[idx]) return;
+  state.rows[idx][inp.dataset.key] = inp.value;
+});
+
+$('#tbody').addEventListener('click', e => {
+  if (!e.target.classList.contains('btn-del')) return;
+  const tr = e.target.closest('tr');
+  const idx = Number(tr.dataset.index);
+  state.rows.splice(idx, 1);
+  renderTable();
+  renderMeta();
+});
+
+$('#btnAddRow').addEventListener('click', () => {
+  const row = {};
+  COLUMNS.forEach(c => { row[c.key] = ''; });
+  const last = state.rows[state.rows.length - 1];
+  if (last){
+    BULK_FIELDS.forEach(k => { row[k] = last[k] || ''; });
+  }
+  state.rows.push(row);
+  renderTable();
+  renderMeta();
+  const sc = document.querySelector('.tbl-scroll');
+  sc.scrollTop = sc.scrollHeight;
+});
+
+$('#btnClearAll').addEventListener('click', () => {
+  if (!state.rows.length) return;
+  if (!confirm('确定要清空所有数据行吗？此操作不可撤销。')) return;
+  state.rows = [];
+  renderTable();
+  renderMeta();
+});
+
+$('#btnApplyBulk').addEventListener('click', () => {
+  const onlyEmpty = $('#chkOnlyEmpty').checked;
+  const inputs = $$('#bulkGrid input[data-bulk]');
+  let filled = 0;
+
+  inputs.forEach(inp => {
+    const key = inp.dataset.bulk;
+    const val = inp.value.trim();
+    if (!val) return;
+    state.rows.forEach(row => {
+      if (onlyEmpty && String(row[key] || '').trim() !== '') return;
+      row[key] = val;
+      filled++;
+    });
+  });
+
+  if (!filled){ toast('没有需要填充的内容', 'err'); return; }
+  renderTable();
+  toast(`已应用 ${filled} 处`, 'ok');
+});
+
+$('#btnClearBulk').addEventListener('click', () => {
+  $$('#bulkGrid input[data-bulk]').forEach(i => { i.value = ''; });
+});
+
+$('#btnReset').addEventListener('click', () => {
+  if (state.rows.length && !confirm('重新上传将丢失当前已填写的内容，确定继续？')) return;
+  state.rows = [];
+  state.meta = { vessel:'', voyage:'', destPort:'', blNo:'' };
+  $('#uploadCard').classList.remove('hidden');
+  $('#workspace').classList.add('hidden');
+  $('#bottomBar').classList.add('hidden');
+  $('#btnReset').style.display = 'none';
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+});
+
+/* 导出 */
+function buildAOA(){
+  const header = COLUMNS.map(c => c.title);
+  const body = state.rows.map((row, i) => COLUMNS.map(c => {
+    if (c.key === 'seq') return i + 1;
+    const v = row[c.key];
+    if (v === '' || v == null) return '';
+    if (c.type === 'num' || c.type === 'int'){
+      const n = Number(v);
+      return isNaN(n) ? String(v) : n;
+    }
+    return String(v);
+  }));
+  return [header, ...body];
+}
+
+function formatTimestamp(date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  const hh = String(date.getHours()).padStart(2, '0');
+  const mm = String(date.getMinutes()).padStart(2, '0');
+  return `${y}-${m}-${d}${hh}${mm}`;
+}
+
+$('#btnExport').addEventListener('click', () => {
+  if (!state.rows.length){ toast('没有可导出的数据', 'err'); return; }
+
+  try {
+    const aoa = buildAOA();
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+
+    ws['!cols'] = COLUMNS.map(c => ({ wch: Math.max(8, Math.round(c.w / 7.5)) }));
+
+    const range = XLSX.utils.decode_range(ws['!ref']);
+    const thin = { style: 'thin', color: { rgb: 'B7C4D6' } };
+    const border = { top: thin, bottom: thin, left: thin, right: thin };
+
+    for (let R = range.s.r; R <= range.e.r; R++){
+      for (let C = range.s.c; C <= range.e.c; C++){
+        const addr = XLSX.utils.encode_cell({ r: R, c: C });
+        if (!ws[addr]) ws[addr] = { t: 's', v: '' };
+
+        const style = {
+          border,
+          alignment: { horizontal: 'center', vertical: 'center', wrapText: true },
+          font: { name: '微软雅黑', sz: 10 }
+        };
+
+        if (R === 0){
+          style.font = { name: '微软雅黑', sz: 10, bold: true, color: { rgb: '1F3864' } };
+          style.fill = { patternType: 'solid', fgColor: { rgb: 'DDEBF7' } };
+        } else {
+          style.font.color = { rgb: '1F2937' };
+        }
+        ws[addr].s = style;
+      }
+    }
+
+    ws['!rows'] = [{ hpt: 26 }];
+    for (let R = 1; R <= range.e.r; R++) ws['!rows'][R] = { hpt: 20 };
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Sheet1');
+
+    const now = new Date();
+    const stamp = formatTimestamp(now);
+    const bl = (state.meta.blNo || 'export').replace(/[\\/:*?"<>|]/g, '');
+    const fileName = `驳船无纸清单_${bl}_${stamp}.xlsx`;
+
+    XLSX.writeFile(wb, fileName);
+    toast('导出成功', 'ok');
+  } catch (err){
+    console.error(err);
+    toast('导出失败：' + err.message, 'err');
+  }
+});
+
+renderBulkGrid();
+</script>
+</body>
+</html>
