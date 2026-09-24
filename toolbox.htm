@@ -1,0 +1,634 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>{eyou:global name='web_title' /}</title>
+<style>
+/* ===== 样式部分（与之前相同，此处省略，实际使用时请粘贴完整CSS） ===== */
+:root {
+  --bg: #f6f7f9;
+  --card: #ffffff;
+  --card-hover: #ffffff;
+  --text: #0f172a;
+  --muted: #64748b;
+  --subtle: #94a3b8;
+  --border: #e6e9ee;
+  --border-strong: #d1d7e0;
+  --accent: #2563eb;
+  --accent-soft: #e0edff;
+  --accent-soft-text: #1d4ed8;
+  --sidebar-bg: #ffffff;
+  --topbar-bg: rgba(246,247,249,.82);
+  --chip-bg: #f1f5f9;
+  --chip-text: #475569;
+  --input-bg: #ffffff;
+  --input-border: #e2e8f0;
+  --shadow-sm: 0 1px 2px rgba(15,23,42,.05);
+  --shadow-lg: 0 14px 36px rgba(15,23,42,.10);
+  --kbd-bg: #f1f5f9;
+  --kbd-border: #e2e8f0;
+  --frame-bg: #ffffff;
+}
+[data-theme="dark"] {
+  --bg: #0a0e14;
+  --card: #141a24;
+  --card-hover: #182029;
+  --text: #e6edf5;
+  --muted: #8b98a8;
+  --subtle: #64748b;
+  --border: #1f2937;
+  --border-strong: #2d3a4a;
+  --accent: #3b82f6;
+  --accent-soft: rgba(59,130,246,.15);
+  --accent-soft-text: #93c5fd;
+  --sidebar-bg: #0e141d;
+  --topbar-bg: rgba(10,14,20,.82);
+  --chip-bg: #1a2332;
+  --chip-text: #b6c2d1;
+  --input-bg: #141a24;
+  --input-border: #263243;
+  --shadow-sm: 0 1px 2px rgba(0,0,0,.4);
+  --shadow-lg: 0 14px 36px rgba(0,0,0,.55);
+  --kbd-bg: #1a2332;
+  --kbd-border: #2d3a4a;
+  --frame-bg: #ffffff;
+}
+/* ……（其余样式与之前完全一致，略） …… */
+</style>
+</head>
+<body>
+
+<!-- =========================================================
+     视图 1：首页（卡片铺满）
+     ========================================================= -->
+<div class="view view-home active" id="viewHome">
+  <div class="home">
+    <header class="home-header">
+      <div class="home-brand">
+        <div class="brand-logo">🧭</div>
+        <div class="brand-text">
+          <div class="brand-name">工具箱</div>
+          <!-- 统计工具总数：用 arclist 的 row 参数或自定义统计 -->
+          <div class="brand-sub" id="brandSub">
+            {eyou:arclist typeid='1' row='100' id='total'}
+              {if $i == 1}共 {$total.total} 个工具{/if}
+            {/eyou:arclist}
+          </div>
+        </div>
+      </div>
+      <button class="theme-btn" data-theme-toggle title="切换主题" aria-label="切换主题"></button>
+    </header>
+
+    <main class="home-main">
+      <div class="home-hero">
+        <h1>选择一个工具</h1>
+        <p>点击卡片即可进入，右上角可在浅色/深色之间切换</p>
+      </div>
+
+      <div class="home-search">
+        <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="11" cy="11" r="7"></circle>
+          <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+        </svg>
+        <input id="homeSearch" class="search-input" type="text" placeholder="搜索工具名称、标签、描述…" autocomplete="off" />
+        <kbd class="search-kbd">/</kbd>
+      </div>
+
+      <!-- ★ 分类筛选：通过 modelsartlist 循环栏目 -->
+      <div class="filters" id="filters">
+        <div class="filter-chip active" data-cat="全部">
+          全部<span class="cnt">
+            {eyou:arclist typeid='1' row='100' id='all'}{if $i == 1}{$all.total}{/if}{/eyou:arclist}
+          </span>
+        </div>
+        {eyou:modelsartlist typeid='1' id='cat'}
+          <div class="filter-chip" data-cat="{$cat.typename}">
+            {$cat.typename}<span class="cnt">
+              {eyou:arclist typeid='$cat.typeid' row='100' id='cnt'}{if $i == 1}{$cnt.total}{/if}{/eyou:arclist}
+            </span>
+          </div>
+        {/eyou:modelsartlist}
+      </div>
+
+      <!-- ★ 工具卡片列表：ul > li 结构，通过 arclist 循环输出 -->
+      <ul class="grid" id="grid">
+        {eyou:arclist typeid='1' row='100' addfields='tool_icon,tool_tint,tool_desc,tool_url,tool_tags,tool_sort' orderby='sort_order' id='field'}
+          <li class="card"
+              data-tool-id="{$field.aid}"
+              data-category="{$field.typename}"
+              data-url="{$field.tool_url}"
+              data-name="{$field.title}"
+              data-icon="{$field.tool_icon}"
+              data-tint="{$field.tool_tint|default='blue'}"
+              data-tags="{$field.tool_tags}"
+              role="button" tabindex="0">
+            <div class="card-icon" data-tint="{$field.tool_tint|default='blue'}">{$field.tool_icon|default='🔧'}</div>
+            <div>
+              <div class="card-title">{$field.title}</div>
+              <div class="card-desc">{$field.tool_desc}</div>
+            </div>
+            <div class="card-foot">
+              <div class="card-tags">
+                <span class="mini-tag">{$field.typename}</span>
+                {volist name="$field.tool_tags" id="tag" offset="0" length="2"}
+                  <span class="mini-tag">{$tag}</span>
+                {/volist}
+              </div>
+              <span class="card-open">
+                打开
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M5 12h14M13 6l6 6-6 6"/>
+                </svg>
+              </span>
+            </div>
+          </li>
+        {/eyou:arclist}
+      </ul>
+
+      <div class="empty" id="empty" hidden>
+        <div class="empty-icon">🔍</div>
+        <div class="empty-title">没有找到匹配的工具</div>
+        <div class="empty-sub">试试其它关键词，或清空搜索条件</div>
+      </div>
+    </main>
+
+    <footer class="home-footer">
+      本地索引 · 所有工具均在浏览器本地运行
+    </footer>
+  </div>
+</div>
+
+<!-- =========================================================
+     视图 2：工作区（左侧菜单 + 右侧 iframe）
+     ========================================================= -->
+<div class="view view-workspace" id="viewWorkspace">
+  <div class="workspace">
+
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-head">
+        <button class="back-btn" id="backHome">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M19 12H5M12 19l-7-7 7-7"/>
+          </svg>
+          返回首页
+        </button>
+      </div>
+
+      <div class="sidebar-search">
+        <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="11" cy="11" r="7"></circle>
+          <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+        </svg>
+        <input id="sideSearch" class="search-input" type="text" placeholder="搜索工具…" autocomplete="off" />
+      </div>
+
+      <!-- ★ 侧边栏导航：ul > li > ul > li 结构，通过 modelsartlist + arclist 循环输出 -->
+      <ul class="sidebar-nav" id="sidebarNav">
+        {eyou:modelsartlist typeid='1' id='cat'}
+          <li class="nav-group">
+            <div class="group-title">
+              {$cat.typename}
+              <span class="cnt">
+                {eyou:arclist typeid='$cat.typeid' row='100' id='cnt'}{if $i == 1}{$cnt.total}{/if}{/eyou:arclist}
+              </span>
+            </div>
+            <ul class="nav-list">
+              {eyou:arclist typeid='$cat.typeid' row='100' addfields='tool_icon,tool_tint,tool_url' orderby='sort_order' id='field'}
+                <li class="nav-item"
+                    data-tool-id="{$field.aid}"
+                    data-category="{$cat.typename}"
+                    data-url="{$field.tool_url}"
+                    data-tint="{$field.tool_tint|default='blue'}"
+                    title="{$field.title}">
+                  <div class="nav-icon">{$field.tool_icon|default='🔧'}</div>
+                  <div class="nav-name">{$field.title}</div>
+                </li>
+              {/eyou:arclist}
+            </ul>
+          </li>
+        {/eyou:modelsartlist}
+      </ul>
+
+      <div class="sidebar-foot">
+        <span class="ver">v1.0</span>
+        <button class="theme-btn sm" data-theme-toggle title="切换主题" aria-label="切换主题"></button>
+      </div>
+    </aside>
+
+    <div class="sidebar-mask" id="sidebarMask"></div>
+
+    <main class="main">
+      <div class="main-head">
+        <button class="menu-toggle" id="menuToggle" title="菜单">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="3" y1="6" x2="21" y2="6"></line>
+            <line x1="3" y1="12" x2="21" y2="12"></line>
+            <line x1="3" y1="18" x2="21" y2="18"></line>
+          </svg>
+        </button>
+
+        <div class="main-title" id="mainTitle">请选择左侧工具</div>
+
+        <div class="main-actions">
+          <button class="action-btn" id="btnRefresh" title="刷新当前工具">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 12a9 9 0 1 1-2.64-6.36"></path>
+              <path d="M21 3v6h-6"></path>
+            </svg>
+          </button>
+          <button class="action-btn" id="btnNewTab" title="在新窗口打开">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+              <path d="M15 3h6v6"></path>
+              <path d="M10 14L21 3"></path>
+            </svg>
+          </button>
+          <button class="action-btn" id="btnFullscreen" title="全屏">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M8 3H5a2 2 0 0 0-2 2v3"></path>
+              <path d="M21 8V5a2 2 0 0 0-2-2h-3"></path>
+              <path d="M3 16v3a2 2 0 0 0 2 2h3"></path>
+              <path d="M16 21h3a2 2 0 0 0 2-2v-3"></path>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <div class="main-body" id="mainBody">
+        <div class="loading-mask" id="loadingMask" style="display:none">
+          <div style="text-align:center">
+            <div class="spinner"></div>
+            <div>正在加载…</div>
+          </div>
+        </div>
+        <iframe id="mainFrame" src="about:blank" allow="clipboard-read; clipboard-write"></iframe>
+      </div>
+    </main>
+  </div>
+</div>
+
+<script>
+/* =========================================================
+ * 前端交互逻辑
+ *
+ * 注意：工具数据已由易优CMS模板引擎直接输出到 HTML 的
+ *       <li> 元素上，前端不再维护 TOOLS 数组。
+ *       renderGrid / renderSidebar 函数已不再需要，
+ *       数据通过 DOM 的 data-* 属性读取。
+ * =======================================================*/
+
+/* ---------- 主题切换（与之前相同） ---------- */
+const media = window.matchMedia('(prefers-color-scheme: dark)');
+const ICON_SUN = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"></path></svg>`;
+const ICON_MOON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>`;
+
+let userOverride = false;
+
+function applyTheme(theme){
+  document.documentElement.setAttribute('data-theme', theme);
+  document.querySelectorAll('[data-theme-toggle]').forEach(btn => {
+    btn.innerHTML = theme === 'dark' ? ICON_SUN : ICON_MOON;
+  });
+}
+
+function currentSystemTheme(){
+  return media.matches ? 'dark' : 'light';
+}
+
+function initTheme(){
+  userOverride = false;
+  applyTheme(currentSystemTheme());
+}
+
+document.querySelectorAll('[data-theme-toggle]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const cur = document.documentElement.getAttribute('data-theme') || 'light';
+    userOverride = true;
+    applyTheme(cur === 'dark' ? 'light' : 'dark');
+  });
+});
+
+function onSystemThemeChange(e){
+  if (!userOverride) applyTheme(e.matches ? 'dark' : 'light');
+}
+if (media.addEventListener) media.addEventListener('change', onSystemThemeChange);
+else if (media.addListener) media.addListener(onSystemThemeChange);
+
+/* ---------- 元素 ---------- */
+const els = {
+  viewHome:      document.getElementById('viewHome'),
+  viewWorkspace: document.getElementById('viewWorkspace'),
+  filters:       document.getElementById('filters'),
+  grid:          document.getElementById('grid'),
+  empty:         document.getElementById('empty'),
+  homeSearch:    document.getElementById('homeSearch'),
+  brandSub:      document.getElementById('brandSub'),
+  sidebar:       document.getElementById('sidebar'),
+  sidebarNav:    document.getElementById('sidebarNav'),
+  sidebarMask:   document.getElementById('sidebarMask'),
+  sideSearch:    document.getElementById('sideSearch'),
+  backHome:      document.getElementById('backHome'),
+  menuToggle:    document.getElementById('menuToggle'),
+  mainTitle:     document.getElementById('mainTitle'),
+  mainFrame:     document.getElementById('mainFrame'),
+  loadingMask:   document.getElementById('loadingMask'),
+  btnRefresh:    document.getElementById('btnRefresh'),
+  btnNewTab:     document.getElementById('btnNewTab'),
+  btnFullscreen: document.getElementById('btnFullscreen'),
+};
+
+let activeCategory = '全部';
+let homeQuery = '';
+let sideQuery = '';
+let activeToolId = null;
+let loadTimer = null;
+
+function escapeAttr(s){
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+const escapeHtml = escapeAttr;
+
+/* ---------- 给工具页 URL 加 ?embedded=1 ---------- */
+function appendEmbeddedFlag(url){
+  if (!url) return url;
+  if (url.indexOf('embedded=1') !== -1) return url;
+  const sep = url.indexOf('?') !== -1 ? '&' : '?';
+  return url + sep + 'embedded=1';
+}
+
+/* =========================================================
+ * 路由
+ * =======================================================*/
+function currentHash(){
+  return (location.hash || '').replace(/^#/, '');
+}
+
+function goHome(){
+  history.replaceState(null, '', location.pathname + location.search);
+  showHome();
+}
+
+function openTool(id){
+  // 从 DOM 中查找对应卡片的数据
+  const card = document.querySelector(`.card[data-tool-id="${id}"]`);
+  if (!card){ goHome(); return; }
+  if (currentHash() !== id){
+    history.pushState(null, '', '#' + id);
+  }
+  showWorkspace({
+    id: id,
+    name: card.dataset.name,
+    url: card.dataset.url
+  });
+}
+
+function showHome(){
+  els.viewHome.classList.add('active');
+  els.viewWorkspace.classList.remove('active');
+  document.body.style.overflow = 'auto';
+  els.mainFrame.src = 'about:blank';
+  activeToolId = null;
+  closeSidebarMobile();
+}
+
+function showWorkspace(tool){
+  els.viewHome.classList.remove('active');
+  els.viewWorkspace.classList.add('active');
+  document.body.style.overflow = 'hidden';
+  loadTool(tool);
+}
+
+window.addEventListener('popstate', () => {
+  const hash = currentHash();
+  if (!hash){
+    showHome();
+  } else {
+    openTool(hash);
+  }
+});
+
+/* =========================================================
+ * 首页筛选 & 搜索
+ * =======================================================*/
+els.filters.addEventListener('click', (e) => {
+  const chip = e.target.closest('.filter-chip');
+  if (!chip) return;
+  activeCategory = chip.dataset.cat;
+  // 更新激活状态
+  document.querySelectorAll('.filter-chip').forEach(c => {
+    c.classList.toggle('active', c.dataset.cat === activeCategory);
+  });
+  filterCards();
+});
+
+function filterCards(){
+  const cards = document.querySelectorAll('#grid .card');
+  let visibleCount = 0;
+  cards.forEach(card => {
+    const cat = card.dataset.category || '';
+    const name = card.dataset.name || '';
+    const tags = card.dataset.tags || '';
+    const icon = card.dataset.icon || '';
+    const desc = card.querySelector('.card-desc')?.textContent || '';
+
+    const matchCat = activeCategory === '全部' || cat === activeCategory;
+    const q = homeQuery.trim().toLowerCase();
+    const matchQuery = !q || [name, cat, tags, icon, desc].join(' ').toLowerCase().includes(q);
+
+    if (matchCat && matchQuery){
+      card.style.display = '';
+      visibleCount++;
+    } else {
+      card.style.display = 'none';
+    }
+  });
+  els.empty.hidden = visibleCount > 0;
+}
+
+els.homeSearch.addEventListener('input', () => {
+  homeQuery = els.homeSearch.value;
+  filterCards();
+});
+
+/* =========================================================
+ * 工作区：加载工具
+ * =======================================================*/
+function loadTool(tool){
+  activeToolId = tool.id;
+  // 更新侧边栏激活状态
+  document.querySelectorAll('.nav-item').forEach(item => {
+    item.classList.toggle('active', item.dataset.toolId === tool.id);
+  });
+  els.mainTitle.textContent = tool.name;
+
+  els.btnNewTab.dataset.url = tool.url;
+
+  els.mainFrame.dataset.url = appendEmbeddedFlag(tool.url);
+  showLoading();
+  els.mainFrame.src = els.mainFrame.dataset.url;
+
+  closeSidebarMobile();
+}
+
+function showLoading(){
+  els.loadingMask.style.display = 'grid';
+  els.loadingMask.classList.remove('hide');
+  els.loadingMask.innerHTML = `
+    <div style="text-align:center">
+      <div class="spinner"></div>
+      <div>正在加载…</div>
+    </div>`;
+
+  clearTimeout(loadTimer);
+  loadTimer = setTimeout(() => {
+    if (els.loadingMask.classList.contains('hide')) return;
+    els.loadingMask.innerHTML = `
+      <div class="error-box">
+        <div class="icon">⚠️</div>
+        <div class="title">文件加载失败</div>
+        <div class="desc">
+          浏览器无法找到下面这个文件：<br>
+          <code>${escapeHtml(els.mainFrame.dataset.url || '')}</code><br>
+          请确认文件路径是否正确。
+        </div>
+      </div>`;
+  }, 3500);
+}
+
+function hideLoading(){
+  clearTimeout(loadTimer);
+  els.loadingMask.classList.add('hide');
+  setTimeout(() => { els.loadingMask.style.display = 'none'; }, 250);
+}
+
+els.mainFrame.addEventListener('load', () => {
+  const src = els.mainFrame.src;
+  if (!src || src === 'about:blank') return;
+  hideLoading();
+});
+
+/* =========================================================
+ * 工作区：侧边栏 & 操作按钮
+ * =======================================================*/
+function openSidebarMobile(){
+  els.sidebar.classList.add('open');
+  els.sidebarMask.classList.add('show');
+}
+function closeSidebarMobile(){
+  els.sidebar.classList.remove('open');
+  els.sidebarMask.classList.remove('show');
+}
+
+els.menuToggle.addEventListener('click', () => {
+  if (els.sidebar.classList.contains('open')) closeSidebarMobile();
+  else openSidebarMobile();
+});
+els.sidebarMask.addEventListener('click', closeSidebarMobile);
+
+els.backHome.addEventListener('click', goHome);
+
+els.btnRefresh.addEventListener('click', () => {
+  if (!els.mainFrame.dataset.url) return;
+  showLoading();
+  els.mainFrame.src = 'about:blank';
+  setTimeout(() => {
+    els.mainFrame.src = els.mainFrame.dataset.url;
+  }, 60);
+});
+
+els.btnNewTab.addEventListener('click', () => {
+  const url = els.btnNewTab.dataset.url;
+  if (url) window.open(url, '_blank', 'noopener');
+});
+
+els.btnFullscreen.addEventListener('click', () => {
+  const body = document.getElementById('mainBody');
+  if (document.fullscreenElement){
+    document.exitFullscreen().catch(() => {});
+  } else if (body.requestFullscreen){
+    body.requestFullscreen().catch(() => {});
+  }
+});
+
+/* =========================================================
+ * 启动
+ * =======================================================*/
+function init(){
+  initTheme();
+
+  // 卡片点击
+  document.querySelectorAll('#grid .card').forEach(card => {
+    card.addEventListener('click', () => openTool(card.dataset.toolId));
+    card.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' '){
+        e.preventDefault();
+        openTool(card.dataset.toolId);
+      }
+    });
+  });
+
+  // 侧边栏点击
+  document.querySelectorAll('#sidebarNav .nav-item').forEach(item => {
+    item.addEventListener('click', () => openTool(item.dataset.toolId));
+  });
+
+  // 侧边栏搜索
+  let sideSearchTimer;
+  els.sideSearch.addEventListener('input', () => {
+    clearTimeout(sideSearchTimer);
+    sideSearchTimer = setTimeout(() => {
+      const q = els.sideSearch.value.trim().toLowerCase();
+      document.querySelectorAll('.nav-item').forEach(item => {
+        const name = (item.querySelector('.nav-name')?.textContent || '').toLowerCase();
+        item.style.display = !q || name.includes(q) ? '' : 'none';
+      });
+      // 隐藏空的分组
+      document.querySelectorAll('.nav-group').forEach(group => {
+        const visible = group.querySelectorAll('.nav-item:not([style*="display: none"])').length;
+        group.style.display = visible > 0 ? '' : 'none';
+      });
+    }, 80);
+  });
+
+  // 快捷键
+  document.addEventListener('keydown', (e) => {
+    const tag = (e.target.tagName || '').toLowerCase();
+    const typing = tag === 'input' || tag === 'textarea' || e.target.isContentEditable;
+
+    if ((e.key === 'k' && (e.ctrlKey || e.metaKey)) || (e.key === '/' && !typing)){
+      e.preventDefault();
+      const target = els.viewHome.classList.contains('active') ? els.homeSearch : els.sideSearch;
+      target.focus();
+      target.select();
+      return;
+    }
+
+    if (e.key === 'Escape' && document.activeElement === els.homeSearch){
+      if (els.homeSearch.value){
+        els.homeSearch.value = '';
+        homeQuery = '';
+        filterCards();
+      } else {
+        els.homeSearch.blur();
+      }
+    }
+  });
+
+  // hash 直接定位
+  const hash = currentHash();
+  if (hash){
+    openTool(hash);
+  } else {
+    showHome();
+  }
+}
+
+init();
+</script>
+</body>
+</html>
